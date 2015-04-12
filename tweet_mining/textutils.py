@@ -31,3 +31,11 @@ def normalize_format(phrase):
     # remove carriage return
     norm_phrase = phrase.replace('\r', '').replace('\n', ' ')
     return norm_phrase
+
+
+def clean_and_tokenize(dataset, stoplist=None):
+    # tokenize the text field in the data:
+    # remove the punctuation, stopwords and words of length 1
+    # text fields becomes a list of tokens instead of a string
+    text_data = [normalize_words(normalize_punctuation(text).split(), stoplist) for text in dataset]
+    return text_data

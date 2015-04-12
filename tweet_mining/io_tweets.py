@@ -9,6 +9,25 @@ from operator import itemgetter
 from os.path import basename
 import textutils as tu
 import dateutil.parser
+import numpy as np
+
+
+def read_counts_bins_labels(dataname):
+    counts = np.loadtxt(dataname+"_cnts.txt")
+    bin_lows = []
+    with open(dataname+"_bins.txt", 'r') as f:
+        for line in f:
+            bin_lows.append(dateutil.parser.parse(line.strip()))
+    topic_definitions = []
+    with open(dataname+"_labels.txt", 'r') as f:
+        for line in f:
+            topic_definitions.append(line.strip().split())
+    topics = []
+    with codecs.open(dataname+"_labels_weights.txt", 'r', encoding='utf-8') as f:
+        for line in f:
+            topics.append([(tup.split(',')[1], tup.split(',')[0]) for tup in line.strip().split(' ')])
+
+    return counts, bin_lows, topic_definitions, topics
 
 
 def read_tweets(filename, fields):
@@ -26,7 +45,7 @@ def read_tweets(filename, fields):
         # a list of indexes of fields
         field_positions = [header.index(unicode(field)) for field in fields]
 
-        logging.info("Saving the following fields: %s " % zip(fields, field_positions) )
+        logging.info("Saving the following fields: %s " % zip(fields, field_positions))
 
         try:
             data = [[row[pos] for pos in field_positions] for row in reader]
@@ -103,8 +122,9 @@ class KenyanCSVMessage():
         self.fields = fields
 
         if os.path.isfile(stop_path):
-            logging.info("Using %s as stopword list" % stop_path )
-            self.stoplist = [unicode(word.strip()) for word in codecs.open(stop_path, 'r', encoding='utf-8').readlines()]
+            logging.info("Using %s as stopword list" % stop_path)
+            self.stoplist = [unicode(word.strip()) for word in
+                             codecs.open(stop_path, 'r', encoding='utf-8').readlines()]
         else:
             self.stoplist = []
 
