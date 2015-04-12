@@ -1,6 +1,7 @@
 __author__ = 'verasazonova'
 
 import csv
+import logging
 import os
 import codecs
 import sys
@@ -25,16 +26,15 @@ def read_tweets(filename, fields):
         # a list of indexes of fields
         field_positions = [header.index(unicode(field)) for field in fields]
 
-        print "Saving the following fields: "
-        print zip(fields, field_positions)
+        logging.info("Saving the following fields: %s " % zip(fields, field_positions) )
 
         try:
             data = [[row[pos] for pos in field_positions] for row in reader]
         except csv.Error as e:
             sys.exit('file %s: %s' % (filename, e))
 
-    print "Data read"
-    print "First line: %s" % data[0]
+    logging.info("Data read")
+    logging.info("First line: %s" % data[0])
     return data
 
 
@@ -71,8 +71,7 @@ def clean_tweets(data, fields):
     else:
         data_sorted = data
 
-    print "Data sorted by date.  Span:"
-    print data_sorted[0][date_pos], data_sorted[-1][date_pos]
+    logging.info("Data sorted by date.  Span: %s - %s" % (data_sorted[0][date_pos], data_sorted[-1][date_pos]))
 
     return data_sorted, date_pos, text_pos
 
@@ -104,8 +103,8 @@ class KenyanCSVMessage():
         self.fields = fields
 
         if os.path.isfile(stop_path):
-            print "Using %s as stopword list" % stop_path
-            self.stoplist = [unicode(word.strip()) for word in open(stop_path, 'r').readlines()]
+            logging.info("Using %s as stopword list" % stop_path )
+            self.stoplist = [unicode(word.strip()) for word in codecs.open(stop_path, 'r', encoding='utf-8').readlines()]
         else:
             self.stoplist = []
 

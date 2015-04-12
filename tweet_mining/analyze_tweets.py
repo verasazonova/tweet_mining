@@ -196,7 +196,6 @@ def extract_topic_definitions(lda_model=None, n_topics=10, dataname=""):
         # Process topic definitions
         topic_definition = []
         for i, topic in enumerate(lda_model.show_topics(n_topics, num_words=20, formatted=False)):
-            print i
             topic_list = [word for _, word in topic]
             # The string defining the topic without the u' character
             topic_definition.append("%i, %s" % (i, repr(" ".join(sorted(topic_list)))[2:-1]))

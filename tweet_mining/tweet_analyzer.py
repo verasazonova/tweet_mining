@@ -10,10 +10,10 @@ import logging
 def calculate_and_plot_lda(filename, ntopics, dataname):
     stop_path = "/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/en_swahili.txt"
 
-   # dataset = KenyanCSVMessage(filename, fields=["id_str", "text", "created_at"], stop_path=stop_path)
-   # lda_model_name = "lda_model_%s_%i" % (dataname, int(ntopics))
-   # analyze_tweets.bin_tweets_by_date_and_lda(dataset, n_topics=ntopics, mallet=False, dataname=dataname,
-   #                                           lda_model_name=lda_model_name)
+    dataset = KenyanCSVMessage(filename, fields=["id_str", "text", "created_at"], stop_path=stop_path)
+    lda_model_name = "lda_model_%s_%i" % (dataname, int(ntopics))
+    analyze_tweets.bin_tweets_by_date_and_lda(dataset, n_topics=ntopics, mallet=False, dataname=dataname,
+                                              lda_model_name=lda_model_name)
 
     counts, bins, labels, topics = plot_tweets.read_counts_bins_labels(dataname)
     plot_tweets.plot_tweets(counts=counts, dates=bins, labels=labels, topics=topics, dataname=dataname)
@@ -41,7 +41,6 @@ def __main__():
     #get_statistics(arguments.filename)
 
     calculate_and_plot_lda(arguments.filename, int(arguments.ntopics), arguments.dataname)
-
 
 
 if __name__ == "__main__":

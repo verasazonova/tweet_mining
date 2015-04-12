@@ -4,6 +4,7 @@ import matplotlib.colors as colors
 import matplotlib.cm as cmx
 import matplotlib.pyplot as plt
 import numpy as np
+import logging
 import dateutil.parser
 
 
@@ -51,9 +52,6 @@ def plot_tweets(counts, dates, labels, topics, dataname):
 
     log_totals = np.log10(totals_by_bin)
 
-    print totals_by_bin
-    print ind.shape, counts.shape
-
     fig = plt.figure()
 
     plt.subplot(211)
@@ -79,7 +77,7 @@ def plot_tweets(counts, dates, labels, topics, dataname):
     for label in labels[1:]:
         common_words = common_words.intersection(set(label.split()))
 
-    print common_words
+    logging.info("Words common to all labels: %s" % common_words )
 
     label_corpus = []
 
