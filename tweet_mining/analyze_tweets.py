@@ -10,11 +10,20 @@ from gensim.corpora import Dictionary
 import codecs
 import textutils as tu
 import logging
+from operator import itemgetter
 
 
 # **************** Cluster relating functions ******************************
 
-def cluster_by_similarity(similarity_matrix, thresh=0.1):
+def build_clusters(counts, topics):
+
+    topic_sims = calculate_topics_similarity(topics)
+    clusters = cluster_by_similarity(topic_sims)
+    new_counts, new_labels = update_counts_labels_by_cluster(counts, topics, clusters)
+    return new_counts, new_labels, clusters
+
+
+def cluster_by_similarity(similarity_matrix, thresh=0.15):
     """
     Creates clusters based on pairwise similarity.  Two vectors are in the same cluster
     if they has similarity larger than a threshhold.
@@ -34,27 +43,33 @@ def cluster_by_similarity(similarity_matrix, thresh=0.1):
             if i != j:
                 if similarity_matrix[i][j] > thresh or similarity_matrix[j][i] > thresh:
                     clusters[j] = clusters[i]
-                    print clusters
     inv_clusters = {}
     for k, v in clusters.iteritems():
         inv_clusters[v] = inv_clusters.get(v, [])
         inv_clusters[v].append(k)
 
+    logging.info("Clusters found: %s " % list(inv_clusters.itervalues()))
     return list(inv_clusters.itervalues())
 
 
-def update_counts_labels_by_cluster(counts, labels, clusters):
+def update_counts_labels_by_cluster(counts, topics, clusters):
 
     n_clusters = len(clusters)
 
     new_counts = np.zeros((n_clusters, counts.shape[1]))
     new_labels = [[] for _ in range(len(clusters))]
-    print new_counts.shape
+
+    n_words = 20
+    # sort the words in topics by weight
+    for i in range(len(topics)):
+        topics[i] = sorted(topics[i], key=itemgetter(1))
 
     for i, cluster in enumerate(clusters):
         for j in cluster:
             new_counts[i, :] += counts[j, :]
-            new_labels[i] += labels[j]
+            # augment the label only if there is place
+            if len(new_labels[i]) < n_words:
+                new_labels[i] += [word for word, _ in topics[j]]
 
         new_labels[i] = sorted(set(new_labels[i]))
 
@@ -107,7 +122,7 @@ def calculate_topics_similarity(topics):
 
 # **************** LDA relating functions ******************************
 
-def process_text(dataset, stoplist=None):
+def process_text(dataset, stoplist=None, bigrams=False, trigrams=False):
     """
     Extracts text data from the dataset
     Cleans and tokenizes text data
@@ -119,9 +134,13 @@ def process_text(dataset, stoplist=None):
     logging.info("Cleaned and tokenzed dataset")
     text_dataset = tu.clean_and_tokenize(dataset, stoplist=stoplist)
 
-    bi_grams = Phrases(text_dataset, threshold=20)
-    #tri_grams = Phrases(bi_grams[text_dataset], threshold=40)
-    text_dataset = bi_grams[text_dataset]
+    if bigrams:
+        bi_grams = Phrases(text_dataset, threshold=20)
+        text_dataset = bi_grams[text_dataset]
+    elif trigrams:
+        bi_grams = Phrases(text_dataset, threshold=20)
+        tri_grams = Phrases(bi_grams[text_dataset], threshold=40)
+        text_dataset = tri_grams[bi_grams[text_dataset]]
 
     dictionary = Dictionary(text_dataset)
     dictionary.filter_extremes(no_below=1, no_above=0.9)
@@ -197,6 +216,7 @@ def extract_topic_definitions(lda_model=None, n_topics=10, dataname=""):
     :return:
     """
     if lda_model is not None:
+
         # Process topic definitions
         topic_definition = []
         for i, topic in enumerate(lda_model.show_topics(n_topics, num_words=20, formatted=False)):
@@ -208,7 +228,8 @@ def extract_topic_definitions(lda_model=None, n_topics=10, dataname=""):
         with open(dataname+"_labels.txt", 'w') as fout:
             for label in topic_definition:
                 fout.write("%s\n" % label)
-        # Save topic definigtions with weights
+
+        # Save topic definitions with weights
         with codecs.open(dataname+"_labels_weights.txt", 'w', encoding='utf-8') as fout:
             for label in lda_model.show_topics(n_topics, num_words=20, formatted=False):
                 for tup in label:
@@ -294,13 +315,13 @@ def date_topic_histogram(date_data=None, topics_data=None, n_topics=10, dataname
         for date in bin_lows:
             fout.write("%s\n" % date)
 
-# **************** W2V relating functions ******************************def load_lda_model(lda_model_name=None, mallet=False):
+# **************** W2V relating functions ******************************
 
-def build_word2vec(text_corpus=None, dictionary=None, size=100, window=10, dataname="none"):
+
+def build_word2vec(text_corpus=None, size=100, window=10, dataname="none"):
     """
     Given a text corpus build a word2vec model
     :param text_corpus:
-    :param dictionary:
     :param size:
     :param window:
     :param dataname:
@@ -332,4 +353,31 @@ def apply_w2v(word_list, w2v_model=None):
 
     if w2v_model is not None:
         for word in word_list:
-            print w2v_model.most_similar(positive=[word])
+            print word, [word for word, _ in w2v_model.most_similar(positive=[word], topn=10)]
+
+
+def build_test_w2v(dataset, word_list, size=100, window=10, dataname=""):
+    # dataset a class of KenyaCSMessage, a list of tweets, sorted by date.
+
+    # Extract date and text.
+    # Clean, tokenize it
+    # Build a BOW model.
+    text_pos = dataset.text_pos
+    data = np.array(dataset.data)
+
+    w2v_model_name = "w2v_model_%s_%i_%i" % (dataname, size, window)
+
+    text_data, text_dict, text_bow = process_text(data[:, text_pos], stoplist=dataset.stoplist)
+    logging.info("Text processed")
+
+    # If and LDA model does not already exist - build it.
+    if w2v_model_name is None or not os.path.isfile(w2v_model_name):
+        logging.info("Building w2v ")
+        w2v_model_name = build_word2vec(text_corpus=text_data, window=window, size=size, dataname=dataname)
+        logging.info("W2V model created in %s " % w2v_model_name)
+
+    # Load the LDA model
+    w2v_model = load_w2v(w2v_model_name)
+
+    # Create the histogram of counts per topic per date.
+    apply_w2v(word_list, w2v_model=w2v_model)

@@ -27,7 +27,7 @@ def read_counts_bins_labels(dataname):
         for line in f:
             topics.append([(tup.split(',')[1], tup.split(',')[0]) for tup in line.strip().split(' ')])
 
-    return counts, bin_lows, topic_definitions, topics
+    return counts, bin_lows, topics
 
 
 def read_tweets(filename, fields):

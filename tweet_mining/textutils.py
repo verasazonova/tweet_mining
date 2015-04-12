@@ -23,7 +23,7 @@ def normalize_punctuation(phrase):
 
 #remove one letter words
 def normalize_words(words_list, stoplist):
-    norm_list = [word for word in words_list if len(word) > 1 and word not in stoplist+[u'rt']]
+    norm_list = [word for word in words_list if word not in stoplist+[u'rt']]
     return norm_list
 
 

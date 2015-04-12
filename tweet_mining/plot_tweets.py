@@ -19,7 +19,7 @@ def get_cmap(n_colors):
     return map_index_to_rgb_color
 
 
-def plot_tweets(counts, dates, labels, dataname):
+def plot_tweets(counts, dates, labels, clusters, dataname):
 
     time_labels = [date.strftime("%m-%d") for date in dates]
 
@@ -63,8 +63,8 @@ def plot_tweets(counts, dates, labels, dataname):
     label_corpus = []
 
     clean_labels = []
-    for label in labels:
-        legend = ""
+    for i, label in enumerate(labels):
+        legend = str(clusters[i])+ ", "
         legend_cnt = 0
         word_list = []
         for word in label:
