@@ -38,12 +38,6 @@ fields_str = "text,retweet_count,favorited,truncated,id_str,in_reply_to_screen_n
 fields = fields_str.split(',')
 
 
-def normalize_format(phrase):
-    # remove carriage return
-    norm_phrase = phrase.replace('\r', '').replace('\n', ' ')
-    return norm_phrase
-
-
 def save_tweet(tweet, filename):
     # save the fields in the tweet defined by the fields list.  Append to a given file
     with codecs.open(filename, 'a', encoding='utf-8') as fout:
