@@ -15,10 +15,10 @@ from operator import itemgetter
 
 # **************** Cluster relating functions ******************************
 
-def build_clusters(counts, topics):
+def build_clusters(counts, topics, thresh):
 
     topic_sims = calculate_topics_similarity(topics)
-    clusters = cluster_by_similarity(topic_sims)
+    clusters = cluster_by_similarity(topic_sims, thresh=thresh)
     new_counts, new_labels = update_counts_labels_by_cluster(counts, topics, clusters)
     return new_counts, new_labels, clusters
 
@@ -71,7 +71,7 @@ def update_counts_labels_by_cluster(counts, topics, clusters):
             if len(new_labels[i]) < n_words:
                 new_labels[i] += [word for word, _ in topics[j]]
 
-        new_labels[i] = sorted(set(new_labels[i]))
+        new_labels[i] = set(new_labels[i])
 
     return new_counts, new_labels
 
@@ -269,7 +269,6 @@ def bin_tweets_by_date_and_lda(dataset, n_topics=10, mallet=False, dataname=""):
     # Create the histogram of counts per topic per date.
     topic_assignments = apply_lda(bow_text_data=text_bow, lda_model=lda_model)
     date_topic_histogram(date_data, topic_assignments, n_topics=n_topics, dataname=dataname)
-
     # Extract and process topic definitions
     extract_topic_definitions(lda_model=lda_model, n_topics=n_topics, dataname=dataname)
 
@@ -353,7 +352,9 @@ def apply_w2v(word_list, w2v_model=None):
 
     if w2v_model is not None:
         for word in word_list:
-            print word, [word for word, _ in w2v_model.most_similar(positive=[word], topn=10)]
+            if word in w2v_model:
+                print "%s:\t\t%s" % (word,
+                                     ", ".join([word for word, _ in w2v_model.most_similar(positive=[word], topn=10)]))
 
 
 def build_test_w2v(dataset, word_list, size=100, window=10, dataname=""):
@@ -379,5 +380,17 @@ def build_test_w2v(dataset, word_list, size=100, window=10, dataname=""):
     # Load the LDA model
     w2v_model = load_w2v(w2v_model_name)
 
+    #word_list = ["attack", "president", "peace", "hope", "violence", "#alshabaab", "government"]
+    #apply_w2v(w2v_model=w2v_model, word_list=word_list)
+
+
     # Create the histogram of counts per topic per date.
-    apply_w2v(word_list, w2v_model=w2v_model)
+    return create_word_vecs(word_list, size=size, w2v_model=w2v_model)
+
+
+def create_word_vecs(word_list, size=100, w2v_model=None):
+    word_vecs = np.zeros((len(word_list), size))
+    for i, word in enumerate(word_list):
+        if word in w2v_model:
+            word_vecs[i] = w2v_model[word]
+    return word_vecs

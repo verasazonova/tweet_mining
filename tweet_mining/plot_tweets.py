@@ -5,6 +5,26 @@ import matplotlib.cm as cmx
 import matplotlib.pyplot as plt
 import numpy as np
 import logging
+from sklearn.manifold import TSNE
+
+def plot_words_distribution(word_vecs, n_topics, dataname=""):
+
+    topic_vecs = np.zeros((n_topics, len(word_vecs[0])))
+    for i in range(n_topics):
+        topic_vecs[i] = np.sum(word_vecs[i*20:i*20+20])
+
+    ts = TSNE(2)
+    logging.info("Reducing with tsne")
+    reduced_vecs = ts.fit_transform(topic_vecs)
+
+    cmap = get_cmap(n_topics)
+
+    fig = plt.figure()
+
+    for i in range(n_topics):
+        plt.plot(reduced_vecs[i,0], reduced_vecs[i,1], marker='o', color=cmap(i), markersize=8, label=str(i))
+    plt.legend()
+    plt.savefig(dataname+"_words.pdf")
 
 
 def get_cmap(n_colors):
@@ -70,7 +90,7 @@ def plot_tweets(counts, dates, labels, clusters, dataname):
         for word in label:
             word_list.append(word)
             if word not in common_words:
-                legend += str(word) + " "
+                legend += word + " "
                 legend_cnt += len(word) + 1
             if legend_cnt > 100:
                 legend += '\n '
@@ -78,5 +98,7 @@ def plot_tweets(counts, dates, labels, clusters, dataname):
         label_corpus.append(word_list)
         clean_labels.append(legend)
 
-    plt.figlegend(legend_proxies, sorted(clean_labels), 'upper right', prop={'size': 6}, framealpha=0.5)
+    logging.info("Saved in %s" % (dataname+".pdf"))
+    plt.figlegend(legend_proxies, clean_labels, 'upper right', prop={'size': 6}, framealpha=0.5)
     plt.savefig(dataname+".pdf")
+
