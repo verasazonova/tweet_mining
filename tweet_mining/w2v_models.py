@@ -281,6 +281,7 @@ def ismisspelled(word1, word2):
     return False
 
 
+
 def check_spelling(w2v_model=None, dictionary=None):
     if w2v_model is None or dictionary is None:
         logging.error("No model or dictionary supplied")
