@@ -215,20 +215,29 @@ def make_x_y(filename):
     return tweet_text_corpus, indices, dataset.stoplist
 
 
-def tweet_classification(filename, size, window, dataname, filename2=None):
+def tweet_classification(filename, size, window, dataname, p=None, thresh=None, n=None):
 
     x_full, y_full, stoplist = make_x_y(filename)
 
-    n_trials = 5
-    ps = [0.001, 0.01, 0.1]
-    threshs = [0, 0.1, 0.2, 0.4, 0.6, 0.8]
+    if n is None:
+        n_trials = range(5)
+    else:
+        n_trials = [n]
+    if p is None:
+        ps = [0.001, 0.01, 0.1]
+    else:
+        ps = [p]
+    if thresh is None:
+        threshs = [0, 0.1, 0.2, 0.4, 0.6, 0.8]
+    else:
+        threshs = [thresh]
 
     clf = LogisticRegression(C=1)
     #clf = SVC(kernel='linear', C=1)
 
     for p in ps: #
 
-        for n in range(n_trials):
+        for n in n_trials:
 
             x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
 
@@ -274,6 +283,9 @@ def __main__():
     parser.add_argument('-n', action='store', dest='ntopics', default='10', help='Number of LDA topics')
     parser.add_argument('--size', action='store', dest='size', default='100', help='Size w2v of LDA topics')
     parser.add_argument('--window', action='store', dest='window', default='10', help='Number of LDA topics')
+    parser.add_argument('--p', action='store', dest='p', default='', help='Fraction of labeled data')
+    parser.add_argument('--thresh', action='store', dest='thresh', default='', help='Fraction of unlabelled data')
+    parser.add_argument('--ntrial', action='store', dest='ntrial', default='', help='Number of the trial')
 
     arguments = parser.parse_args()
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO,
@@ -296,7 +308,8 @@ def __main__():
 
     #compare_language_identification(arguments.filename,  "word_clusters_identified.txt",  "word_clusters.txt")
 
-    tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname)
+    tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname,
+                         p=arguments.p, thresh=arguments.thresh, n=arguments.ntrial)
 
 if __name__ == "__main__":
     __main__()
