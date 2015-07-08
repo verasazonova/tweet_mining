@@ -75,14 +75,10 @@ class W2VWeightedAveragedModel(BaseEstimator, TransformerMixin):
         x_processed = [[word for word in text if word in self.dictionary.token2id and word not in self.stoplist]
                        for text in x_clean]
 
-        x_tfidf = self.tfidf[[self.dictionary.doc2bow(text) for text in x_clean]]
-        weights = [[w for _,w in text] for text in x_tfidf]
-
         # W2V vectors averaging
         if self.w2v_model is not None:
             x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed,
-                                                         size=self.w2v_model.layer1_size,
-                                                         weights=weights)
+                                                         dictionary=self.dictionary, tfidf=None)
             logging.info("W2V Averaged: returning pre-processed data of shape %s" % (x_vector.shape, ))
         else:
             logging.info("W2V Averaged: no model was provided.")
@@ -127,8 +123,7 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
         # W2V vectors averaging
         if self.w2v_model is not None:
-            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed,
-                                                               size=self.w2v_model.layer1_size)
+            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed)
             logging.info("W2V Averaged: returning pre-processed data of shape %s" % (x_vector.shape, ))
         else:
             logging.info("W2V Averaged: no model was provided.")

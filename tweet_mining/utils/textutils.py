@@ -8,15 +8,15 @@ import logging
 
 # add space around punctuation
 # assumes unicode strings
-def normalize_punctuation(phrase, url=True, username=True, hashtag=True, punctuation=True, RT=True):
+def normalize_punctuation(phrase, url=True, username=True, hashtag=True, punctuation=True, RT=False):
     norm_phrase = phrase.lower().strip()
     #delete url
     if url:
-        norm_phrase = re.sub(r'http(\S*)\b', "", norm_phrase)
+        norm_phrase = re.sub(r'http(\S*)\b', "URL", norm_phrase)
 
     #delete usernames
     if username:
-        norm_phrase = re.sub(r'@(\w*)\b', "", norm_phrase)
+        norm_phrase = re.sub(r'@(\w*)\b', "USER", norm_phrase)
 
     #delete RT
     if RT:

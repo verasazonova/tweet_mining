@@ -159,19 +159,26 @@ def create_word_vecs(word_list, size=100, w2v_model=None):
     return word_vecs
 
 
-def vectorize_tweet(w2v_model, tweet, size=100, weights=None):
+def vectorize_tweet(w2v_model, tweet, weight_dict=None):
+    size = w2v_model.layer1_size
     vec = np.zeros(size).reshape((1, size))
     count = 0.
     # allow one word vectorization without encapsulation by an array
     if isinstance(tweet, string_types):
         tweet = [tweet]
-    for word, weight in zip(tweet, weights):
+    for word in tweet:
         try:
-            if weight is None:
+            if weight_dict is None:
                 vec += w2v_model[word].reshape((1, size))
+                count += 1.
             else:
+                if word in weight_dict:
+                    weight = weight_dict[word]
+                else:
+                    weight = 1
                 vec += w2v_model[word].reshape((1, size)) * weight
-            count += 1.
+                count += weight
+
         except KeyError:
             continue
     if count != 0:
@@ -179,13 +186,37 @@ def vectorize_tweet(w2v_model, tweet, size=100, weights=None):
     return vec
 
 
-def vectorize_tweet_corpus(w2v_model, tweet_corpus, size=100, weights=None):
+def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None):
     logging.info("Vectorizing a corpus")
+    size = w2v_model.layer1_size
     if len(tweet_corpus) > 0:
-        vecs = np.concatenate([vectorize_tweet(w2v_model, z, size, weights) for z in tweet_corpus])
+        if dictionary is not None:
+            vecs = np.concatenate([vectorize_bow_text(w2v_model, z, dictionary, tfidf=tfidf) for z in tweet_corpus])
+        else:
+            vecs = np.concatenate([vectorize_tweet(w2v_model, z, weight_dict) for z in tweet_corpus])
     else:
         vecs = np.zeros(size).reshape((1, size))
     return vecs
+
+
+def vectorize_bow_text(w2v_model, text, dictionary, tfidf=None):
+    size = w2v_model.layer1_size
+    vec = np.zeros(size).reshape((1, size))
+    count = 0.
+    if tfidf is not None:
+        bow = tfidf[dictionary.doc2bow(text)]
+    else:
+        bow = dictionary.doc2bow(text)
+    for weight, word_id in bow:
+        try:
+            word = dictionary[word_id]
+            vec += w2v_model[word].reshape((1, size)) * weight
+            count += weight
+        except KeyError:
+            continue
+    if count != 0:
+        vec /= count
+    return vec
 
 
 # **************** Spell checking relating functions ******************************

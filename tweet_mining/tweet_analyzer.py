@@ -195,9 +195,9 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
         x_shuffled, y_shuffled = shuffle(x, y, random_state=n)
         skf = cross_validation.StratifiedKFold(y_shuffled, n_folds=n_cv)  # random_state=n, shuffle=True)
         scores[n * n_cv:(n + 1) * n_cv] = cross_validation.cross_val_score(clf, x_shuffled, y_shuffled, cv=skf,
-                                                                           scoring='accuracy',
+                                                                           scoring='f1',
                                                                            fit_params=fit_parameters,
-                                                                           verbose=2, n_jobs=1)
+                                                                           verbose=0, n_jobs=1)
     print scores, scores.mean(), scores.std()
     return scores.mean()
 
@@ -215,54 +215,46 @@ def make_x_y(filename):
     return tweet_text_corpus, indices, dataset.stoplist
 
 
-
 def tweet_classification(filename, size, window, dataname, filename2=None):
 
     x_full, y_full, stoplist = make_x_y(filename)
-    #x_test, y_test, stoplist = make_x_y(filename2)
 
-
-    #clf = SGDClassifier(loss='log', penalty='l1')
+    n_trials = 5
+    ps = [0.001, 0.01, 0.1]
+    threshs = [0, 0.1, 0.2, 0.4, 0.6, 0.8]
 
     clf = LogisticRegression(C=1)
     #clf = SVC(kernel='linear', C=1)
 
-    #clf = MultinomialNB(alpha=1)
+    for p in ps: #
 
-    #print 'Marority: %0.2f' % max(np.bincount(y_cv) / float(len(y_cv)))
+        for n in range(n_trials):
 
-    for p in [0.2, 0.5]: #
+            x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
 
-        x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p)
+            for thresh in threshs:
 
-        for thresh in [0]:
 
-            #x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh)
-            #w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv, x_w2v])]
-            #w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
-            #w2v_model = w2v_models.load_w2v(w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window, min_count=1))
-            logging.info("Model created")
+                x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh)
+
+                w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv, x_w2v])]
+                w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
+                logging.info("Model created")
+
+                clf_pipeline = Pipeline([
+                        ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1, stoplist=[])),
+                        ('clf', clf) ])
+
+                mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
+                print n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean
 
             clf_pipeline = Pipeline([
-                    #('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1, stoplist=[])),
-                    ('bow', transformers.BOWModel(no_above=0.8, no_below=2, stoplist=stoplist)),
-                    ('clf', clf) ])
+                        ('bow', transformers.BOWModel(no_above=0.8, no_below=2, stoplist=stoplist)),
+                        ('clf', clf) ])
 
+            mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
+            print n, "bow", p, len(x_cv),  mean
 
-            parameters = {
-                          'clf__C': [0.1, 1, 10],
-                          #'w2v_avg__no_below': [1, 5, 10],
-                          #'w2v_avg__no_above': [0.99, 0.9],
-                          'w2v_avg__stoplist': (stoplist, []),
-                          #'w2v_avg__w2v_model': [w2v_model, None]
-                         }
-
-            #print len(x_full)
-            #run_grid_search(x_val, y_val, clf=clf_pipeline, parameters=parameters)
-
-            mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=1, n_cv=5)
-
-            print size, p, thresh, len(x_full), mean
 
 
 def print_tweets(filename):
