@@ -287,6 +287,7 @@ def __main__():
     parser.add_argument('--thresh', action='store', dest='thresh', default='', help='Fraction of unlabelled data')
     parser.add_argument('--ntrial', action='store', dest='ntrial', default='', help='Number of the trial')
 
+
     arguments = parser.parse_args()
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO,
                         filename=arguments.dataname+"_log.txt")
