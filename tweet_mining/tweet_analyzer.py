@@ -235,34 +235,37 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
     clf = LogisticRegression(C=1)
     #clf = SVC(kernel='linear', C=1)
 
-    for p in ps: #
+    with open(dataname + "_fscore.txt", 'a') as f:
 
-        for n in n_trials:
+        for p in ps: #
 
-            x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
+            for n in n_trials:
 
-            for thresh in threshs:
+                x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
+
+                for thresh in threshs:
 
 
-                x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh)
+                    x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh)
 
-                w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv, x_w2v])]
-                w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
-                logging.info("Model created")
+                    w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv, x_w2v])]
+                    w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
+                    logging.info("Model created")
+
+                    clf_pipeline = Pipeline([
+                            ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1, stoplist=[])),
+                            ('clf', clf) ])
+
+                    mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
+                    #print n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean
+                    f.write("%i, %s, %i, %d, %d, %i, %i, %.4d \n" % (n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean))
 
                 clf_pipeline = Pipeline([
-                        ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1, stoplist=[])),
-                        ('clf', clf) ])
+                            ('bow', transformers.BOWModel(no_above=0.8, no_below=2, stoplist=stoplist)),
+                            ('clf', clf) ])
 
                 mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
-                print n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean
-
-            clf_pipeline = Pipeline([
-                        ('bow', transformers.BOWModel(no_above=0.8, no_below=2, stoplist=stoplist)),
-                        ('clf', clf) ])
-
-            mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
-            print n, "bow", p, len(x_cv),  mean
+                f.write("%i, %s, %i, %d, %d, %i, %i, %.4d \n" % (n, "bow", -1, p, -1, len(x_cv), -1, mean))
 
 
 
