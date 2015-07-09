@@ -257,6 +257,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                 mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
                 #print n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean
 
+
                 with open(dataname + "_fscore.txt", 'a') as f:
                     f.write("%i, %s, %i, %d, %d, %i, %i, %.4d \n" % (n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean))
 
