@@ -309,7 +309,7 @@ def __main__():
     #compare_language_identification(arguments.filename,  "word_clusters_identified.txt",  "word_clusters.txt")
 
     tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname,
-                         p=arguments.p, thresh=arguments.thresh, n=arguments.ntrial)
+                         p=float(arguments.p), thresh=float(arguments.thresh), n=int(arguments.ntrial))
 
 if __name__ == "__main__":
     __main__()
