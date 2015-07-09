@@ -219,15 +219,15 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
     x_full, y_full, stoplist = make_x_y(filename)
 
-    if n is None:
+    if n is None or n == -1:
         n_trials = range(5)
     else:
         n_trials = [n]
-    if p is None:
+    if p is None or p == -1:
         ps = [0.001, 0.01, 0.1]
     else:
         ps = [p]
-    if thresh is None:
+    if thresh is None or thresh == -1:
         threshs = [0, 0.1, 0.2, 0.4, 0.6, 0.8]
     else:
         threshs = [thresh]
@@ -283,9 +283,9 @@ def __main__():
     parser.add_argument('-n', action='store', dest='ntopics', default='10', help='Number of LDA topics')
     parser.add_argument('--size', action='store', dest='size', default='100', help='Size w2v of LDA topics')
     parser.add_argument('--window', action='store', dest='window', default='10', help='Number of LDA topics')
-    parser.add_argument('--p', action='store', dest='p', default='', help='Fraction of labeled data')
-    parser.add_argument('--thresh', action='store', dest='thresh', default='', help='Fraction of unlabelled data')
-    parser.add_argument('--ntrial', action='store', dest='ntrial', default='', help='Number of the trial')
+    parser.add_argument('--p', action='store', dest='p', default='-1', help='Fraction of labeled data')
+    parser.add_argument('--thresh', action='store', dest='thresh', default='-1', help='Fraction of unlabelled data')
+    parser.add_argument('--ntrial', action='store', dest='ntrial', default='-1', help='Number of the trial')
 
     arguments = parser.parse_args()
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO,
