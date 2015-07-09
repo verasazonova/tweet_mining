@@ -198,7 +198,7 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
                                                                            scoring='f1',
                                                                            fit_params=fit_parameters,
                                                                            verbose=0, n_jobs=1)
-    print scores, scores.mean(), scores.std()
+    #print scores, scores.mean(), scores.std()
     return scores.mean()
 
 #------------------
@@ -286,7 +286,6 @@ def __main__():
     parser.add_argument('--p', action='store', dest='p', default='', help='Fraction of labeled data')
     parser.add_argument('--thresh', action='store', dest='thresh', default='', help='Fraction of unlabelled data')
     parser.add_argument('--ntrial', action='store', dest='ntrial', default='', help='Number of the trial')
-
 
     arguments = parser.parse_args()
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO,

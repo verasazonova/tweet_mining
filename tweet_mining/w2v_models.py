@@ -232,8 +232,8 @@ def train(features):
     return model
 
 
-big_file = "/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/big.txt"
-NWORDS = train(words(file(big_file).read()))
+#big_file = "/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/big.txt"
+NWORDS = [] #train(words(file(big_file).read()))
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
 
 
