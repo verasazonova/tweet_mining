@@ -103,3 +103,63 @@ def plot_tweets(counts, dates, labels, clusters, dataname):
     plt.figlegend(legend_proxies, clean_labels, 'upper right', prop={'size': 6}, framealpha=0.5)
     plt.savefig(dataname+".pdf")
 
+
+def extract_xy_average(data, xind, yind, cind, cval):
+    print cval
+    data_c = data[data[:, cind]==cval]
+
+    xvals = sorted(list(set(data_c[:, xind])))
+    yvals = []
+    for xval in xvals:
+        i = data_c[:, xind] == xval
+        print xval, data_c[i, yind]
+        yvals.append( data_c[i, yind].mean())
+    return np.array(xvals), np.array(yvals)
+
+
+def plot_multiple_xy_averages(data, xind, yind, cind):
+
+    cvals = sorted(list(set(data[:, cind])))
+    cmap = get_cmap(len(cvals))
+
+    for i, cval in enumerate(cvals):
+        xvals, yvals = extract_xy_average(data, xind, yind, cind, cval)
+        #print cval, xvals, yvals
+        plt.plot(xvals, yvals, 'o-', color=cmap(i), label=cval)
+
+    plt.legend(loc=4)
+
+
+def extract_base(data, xind, yind, cind, cval):
+
+    ind = data[:, cind]==cval
+    #xvals = [min(data[:, xind]), max(data[:, xind])]
+    xvals = plt.xlim()
+    yvals = [data[ind, yind].mean(), data[ind, yind].mean()]
+    return xvals, yvals
+
+
+def plot_multiple_bases(data, xind, yind, cind):
+
+    cvals = sorted(list(set(data[:, cind])))
+    cmap = get_cmap(len(cvals))
+
+    for i, cval in enumerate(cvals):
+        xvals, yvals = extract_base(data, xind, yind, cind, cval)
+        plt.plot(xvals, yvals, '--', color=cmap(i))
+
+    plt.xlabel("W2V corpus")
+    plt.ylabel("F-Score")
+    plt.title("W2V (s=100, w=10) vs. BOW")
+    plt.savefig("test.pdf")
+
+
+def plot_curves_baseslines(data, xind, yind, curve_ind, baseline_ind):
+
+    fig = plt.figure()
+    plt.axis()
+
+    plot_multiple_xy_averages(data, xind, yind, curve_ind)
+    plot_multiple_bases(data, xind, yind, baseline_ind)
+
+    plt.legend()

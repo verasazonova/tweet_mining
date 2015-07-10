@@ -215,22 +215,22 @@ def make_x_y(filename):
     return tweet_text_corpus, indices, dataset.stoplist
 
 
-def tweet_classification(filename, size, window, dataname, p=None, thresh=None, n=None, clf_name='w2v'):
+def tweet_classification(filename, size, window, dataname, per=None, thr=None, ntrial=None, clf_name='w2v'):
 
     x_full, y_full, stoplist = make_x_y(filename)
 
-    if n is None or n == -1:
+    if ntrial is None or ntrial == -1:
         n_trials = range(5)
     else:
-        n_trials = [n]
-    if p is None or p == -1:
-        ps = [0.001, 0.01, 0.1]
+        n_trials = [ntrial]
+    if per is None or per == -1:
+        ps = [0.001, 0.1, 0.2]
     else:
-        ps = [p]
-    if thresh is None or thresh == -1:
-        threshs = [0, 0.1, 0.2, 0.4, 0.6, 0.8]
+        ps = [per]
+    if thr is None or thr == -1:
+        threshs = [0, 0.1, 0.4, 0.8]
     else:
-        threshs = [thresh]
+        threshs = [thr]
 
     logging.info("Classifing for p= %s" % ps)
     logging.info("Classifing for ntrials = %s" % n_trials)
@@ -244,6 +244,8 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         for n in n_trials:
 
             x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
+
+            print p, n
 
             if clf_name == 'w2v':
 
@@ -259,8 +261,8 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                             ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1, stoplist=[])),
                             ('clf', clf) ])
 
-                    mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
-                    #print n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean
+                    mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=1, n_cv=5)
+                    print n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean
 
 
                     with open(dataname + "_fscore.txt", 'a') as f:
@@ -272,10 +274,11 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                         ('bow', transformers.BOWModel(no_above=0.8, no_below=2, stoplist=stoplist)),
                         ('clf', clf) ])
 
-                mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=5, n_cv=5)
+                mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=1, n_cv=5)
                 with open(dataname + "_fscore.txt", 'a') as f:
                     f.write("%i, %s, %i, %f, %f, %i, %i, %f \n" % (n, "bow", -1, p, -1, len(x_cv), -1, mean))
 
+                print n, "bow", p,len(x_cv),  mean
 
 
 def print_tweets(filename):
@@ -285,6 +288,15 @@ def print_tweets(filename):
     #data = ioutils.KenyanCSVMessage(filename, ["id_str", "text", "created_at"])
     #for row in data:
     #    print row[data.text_pos]
+
+
+def plot_scores():
+    data = np.loadtxt("w2v_f-scores-100-10.txt")
+    plotutils.plot_multiple_xy_averages(data, 5, 6, 2)
+
+    data = np.loadtxt("bow_f-scores-100-10.txt")
+    plotutils.plot_multiple_bases(data, 2, 3, 1)
+
 
 
 def __main__():
@@ -322,8 +334,10 @@ def __main__():
     #compare_language_identification(arguments.filename,  "word_clusters_identified.txt",  "word_clusters.txt")
 
     tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname,
-                         p=float(arguments.p), thresh=float(arguments.thresh), n=int(arguments.ntrial),
+                         per=float(arguments.p), thr=float(arguments.thresh), ntrial=int(arguments.ntrial),
                          clf_name=arguments.clfname)
+
+    #plot_scores()
 
 if __name__ == "__main__":
     __main__()
