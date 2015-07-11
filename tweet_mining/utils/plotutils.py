@@ -112,20 +112,20 @@ def extract_xy_average(data, xind, yind, cind, cval):
     yvals = []
     for xval in xvals:
         i = data_c[:, xind] == xval
-        print xval, data_c[i, yind]
         yvals.append( data_c[i, yind].mean())
     return np.array(xvals), np.array(yvals)
 
 
-def plot_multiple_xy_averages(data, xind, yind, cind):
+def plot_multiple_xy_averages(data, xind, yind, cind, marker, cmap=None):
 
     cvals = sorted(list(set(data[:, cind])))
-    cmap = get_cmap(len(cvals))
+    if cmap is None:
+        cmap = get_cmap(len(cvals))
 
     for i, cval in enumerate(cvals):
         xvals, yvals = extract_xy_average(data, xind, yind, cind, cval)
-        #print cval, xvals, yvals
-        plt.plot(xvals, yvals, 'o-', color=cmap(i), label=cval)
+        print cval, xvals, yvals
+        plt.plot(xvals, yvals, '-', marker=marker, color=cmap(i), label=cval)
 
     plt.legend(loc=4)
 
@@ -139,10 +139,11 @@ def extract_base(data, xind, yind, cind, cval):
     return xvals, yvals
 
 
-def plot_multiple_bases(data, xind, yind, cind):
+def plot_multiple_bases(data, xind, yind, cind, cmap=None):
 
     cvals = sorted(list(set(data[:, cind])))
-    cmap = get_cmap(len(cvals))
+    if cmap is None:
+        cmap = get_cmap(len(cvals))
 
     for i, cval in enumerate(cvals):
         xvals, yvals = extract_base(data, xind, yind, cind, cval)
@@ -154,12 +155,19 @@ def plot_multiple_bases(data, xind, yind, cind):
     plt.savefig("test.pdf")
 
 
-def plot_curves_baseslines(data, xind, yind, curve_ind, baseline_ind):
+def plot_curves_baseslines():
 
     fig = plt.figure()
     plt.axis()
 
-    plot_multiple_xy_averages(data, xind, yind, curve_ind)
-    plot_multiple_bases(data, xind, yind, baseline_ind)
+    cmap = get_cmap(10)
 
-    plt.legend()
+
+    data = np.loadtxt("w2v_f-scores-100-10.txt")
+    plot_multiple_xy_averages(data, 5, 6, 2, 'o', cmap=cmap)
+
+    data = np.loadtxt("w2v_f-scores-300-10.txt")
+    plot_multiple_xy_averages(data, 5, 6, 2, 'v', cmap=cmap)
+
+    data = np.loadtxt("bow_f-scores-100-10.txt")
+    plot_multiple_bases(data, 2, 3, 1, cmap=cmap)

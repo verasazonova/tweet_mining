@@ -243,7 +243,9 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
 
         for n in n_trials:
 
-            x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
+            #x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
+            x_cv = x_full
+            y_cv = y_full
 
             print p, n
 
@@ -251,9 +253,9 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
 
                 for thresh in threshs:
 
-                    x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
+                    #x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
 
-                    w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv, x_w2v])]
+                    w2v_corpus = [tu.normalize_punctuation(text).split() for text in x_full] #np.concatenate([x_cv, x_w2v])]
                     w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
                     logging.info("Model created")
 
@@ -291,12 +293,7 @@ def print_tweets(filename):
 
 
 def plot_scores():
-    data = np.loadtxt("w2v_f-scores-100-10.txt")
-    plotutils.plot_multiple_xy_averages(data, 5, 6, 2)
-
-    data = np.loadtxt("bow_f-scores-100-10.txt")
-    plotutils.plot_multiple_bases(data, 2, 3, 1)
-
+    plotutils.plot_curves_baseslines()
 
 
 def __main__():
@@ -333,11 +330,11 @@ def __main__():
 
     #compare_language_identification(arguments.filename,  "word_clusters_identified.txt",  "word_clusters.txt")
 
-    tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname,
-                         per=float(arguments.p), thr=float(arguments.thresh), ntrial=int(arguments.ntrial),
-                         clf_name=arguments.clfname)
+    #tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname,
+    #                     per=float(arguments.p), thr=float(arguments.thresh), ntrial=int(arguments.ntrial),
+    #                     clf_name=arguments.clfname)
 
-    #plot_scores()
+    plot_scores()
 
 if __name__ == "__main__":
     __main__()
