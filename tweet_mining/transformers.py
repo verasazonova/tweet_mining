@@ -4,6 +4,7 @@ import logging
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 import utils.textutils as tu
+from sklearn.mixture import DPGMM
 from sklearn.preprocessing import scale
 from gensim import corpora, models, matutils
 import re
@@ -88,12 +89,13 @@ class W2VWeightedAveragedModel(BaseEstimator, TransformerMixin):
 
 class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
-    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None):
+    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None, type="avg"):
         self.w2v_model = w2v_model
         self.dictionary = None
         self.no_above = no_above
         self.no_below = no_below
         self.stoplist = stoplist
+        self.type = type
         logging.info("W2v averaged classifier %s " % self.w2v_model)
 
     def fit(self, X, y=None):
@@ -104,6 +106,8 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
         self.dictionary = corpora.Dictionary(x_clean)
         self.dictionary.filter_extremes(no_above=self.no_above, no_below=self.no_below)
+
+        #self.cluster = DPGMM(n_components=30, covariance_type='diag', alpha=5,  n_iter=1000)
 
 
         logging.info("W2V: got a model %s " % (self.w2v_model,))
@@ -123,7 +127,7 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
         # W2V vectors averaging
         if self.w2v_model is not None:
-            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed)
+            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed, self.type)
             logging.info("W2V Averaged: returning pre-processed data of shape %s" % (x_vector.shape, ))
         else:
             logging.info("W2V Averaged: no model was provided.")

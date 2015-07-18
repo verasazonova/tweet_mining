@@ -6,6 +6,8 @@ import os.path
 
 from six import string_types
 
+from scipy.stats import skew
+
 from tweet_mining.utils import textutils as tu
 from gensim.models.doc2vec import LabeledSentence
 from gensim.models import Word2Vec, Doc2Vec
@@ -51,8 +53,8 @@ def build_word2vec(text_corpus, size=100, window=10, min_count=2, dataname="none
     w2v_model = Word2Vec(sentences=text_corpus, size=size, alpha=0.05, window=window, min_count=min_count, iter=20,
                          sample=1e-3, seed=1, workers=4, hs=1, min_alpha=0.0001, sg=1, negative=0, cbow_mean=0)
     logging.info("%s" % w2v_model)
-    #w2v_model_name = make_w2v_model_name(dataname, size, window, min_count)
-    #w2v_model.save(w2v_model_name)
+    w2v_model_name = make_w2v_model_name(dataname, size, window, min_count)
+    w2v_model.save(w2v_model_name)
 
     return w2v_model
 
@@ -159,7 +161,7 @@ def create_word_vecs(word_list, size=100, w2v_model=None):
     return word_vecs
 
 
-def vectorize_tweet(w2v_model, tweet, weight_dict=None):
+def vectorize_tweet_old(w2v_model, tweet, weight_dict=None):
     size = w2v_model.layer1_size
     vec = np.zeros(size).reshape((1, size))
     count = 0.
@@ -186,14 +188,43 @@ def vectorize_tweet(w2v_model, tweet, weight_dict=None):
     return vec
 
 
-def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None):
+def vectorize_tweet(w2v_model, tweet, type="avg"):
+    size = w2v_model.layer1_size
+    #vec_size = 2*size
+    #vec = np.zeros(size).reshape((1, size))
+    #count = 0.
+    # allow one word vectorization without encapsulation by an array
+    if isinstance(tweet, string_types):
+        tweet = [tweet]
+
+    # get a matrix of w2v vectors
+    vec_list = [w2v_model[word].reshape((1,size)) for word in tweet if word in w2v_model]
+
+    if not vec_list:
+        data = np.zeros(size).reshape((1, size))
+
+    else:
+        data = np.concatenate(vec_list)
+
+    features = [data.mean(axis=0)]
+    if type == "std":
+        features += data.std(axis=0)
+
+    vec = np.concatenate(features)  #, skew(data, axis=0)])
+    vec = vec.reshape((1, len(vec)))
+
+    return vec
+
+
+
+def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None, type="avg"):
     logging.info("Vectorizing a corpus")
     size = w2v_model.layer1_size
     if len(tweet_corpus) > 0:
         if dictionary is not None:
             vecs = np.concatenate([vectorize_bow_text(w2v_model, z, dictionary, tfidf=tfidf) for z in tweet_corpus])
         else:
-            vecs = np.concatenate([vectorize_tweet(w2v_model, z, weight_dict) for z in tweet_corpus])
+            vecs = np.concatenate([vectorize_tweet(w2v_model, z, type=type) for z in tweet_corpus])
     else:
         vecs = np.zeros(size).reshape((1, size))
     return vecs

@@ -197,7 +197,7 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
         scores[n * n_cv:(n + 1) * n_cv] = cross_validation.cross_val_score(clf, x_shuffled, y_shuffled, cv=skf,
                                                                            scoring='f1',
                                                                            fit_params=fit_parameters,
-                                                                           verbose=0, n_jobs=1)
+                                                                           verbose=2, n_jobs=1)
     #print scores, scores.mean(), scores.std()
     return scores.mean()
 
@@ -217,20 +217,25 @@ def make_x_y(filename):
 
 def tweet_classification(filename, size, window, dataname, per=None, thr=None, ntrial=None, clf_name='w2v'):
 
-    x_full, y_full, stoplist = make_x_y(filename)
+    x_cv, y_cv, stoplist = make_x_y(filename)
 
     if ntrial is None or ntrial == -1:
-        n_trials = range(5)
+        n_trials = [1, 2]
     else:
         n_trials = [ntrial]
     if per is None or per == -1:
-        ps = [0.001, 0.1, 0.2]
+        ps = [0.01]
     else:
         ps = [per]
     if thr is None or thr == -1:
         threshs = [0, 0.1, 0.4, 0.8]
     else:
         threshs = [thr]
+
+
+    sizes = [100, 300, 500, 1000]
+    n=0
+    thresh = 0
 
     logging.info("Classifing for p= %s" % ps)
     logging.info("Classifing for ntrials = %s" % n_trials)
@@ -239,36 +244,40 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
     clf = LogisticRegression(C=1)
     #clf = SVC(kernel='linear', C=1)
 
+
     for p in ps: #
 
-        for n in n_trials:
+        for s in sizes:
 
             #x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
-            x_cv = x_full
-            y_cv = y_full
+            w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv])] #, x_w2v
+            w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=s, window=window, min_count=1)
+            if os.path.isfile(w2v_model_name):
+                w2v_model = w2v_models.load_w2v(w2v_model_name)
+                logging.info("Model Loaded")
+            else:
+                w2v_model = w2v_models.build_word2vec(w2v_corpus, size=s, window=window, min_count=1, dataname=dataname)
+                logging.info("Model created")
 
-            print p, n
 
             if clf_name == 'w2v':
 
-                for thresh in threshs:
+                for type in ["avg", "std"]:
 
                     #x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
 
-                    w2v_corpus = [tu.normalize_punctuation(text).split() for text in x_full] #np.concatenate([x_cv, x_w2v])]
-                    w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
-                    logging.info("Model created")
-
                     clf_pipeline = Pipeline([
-                            ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1, stoplist=[])),
+                            ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1,
+                                                                      stoplist=[], type=type)),
                             ('clf', clf) ])
 
                     mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=1, n_cv=5)
-                    print n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean
+                    print n, type, s, p, thresh, len(x_cv), len(w2v_corpus), mean
 
 
                     with open(dataname + "_fscore.txt", 'a') as f:
-                        f.write("%i, %s, %i, %f, %f, %i, %i, %f \n" % (n, "w2v", size, p, thresh, len(x_cv), len(w2v_corpus), mean))
+                        f.write("%i, %s, %i, %f, %f, %i, %i, %f \n" % (n, type, size, p, thresh, len(x_cv), len(w2v_corpus), mean))
+
 
             else:
 
@@ -308,6 +317,8 @@ def __main__():
     parser.add_argument('--thresh', action='store', dest='thresh', default='-1', help='Fraction of unlabelled data')
     parser.add_argument('--ntrial', action='store', dest='ntrial', default='-1', help='Number of the trial')
     parser.add_argument('--clfname', action='store', dest='clfname', default='w2v', help='Number of the trial')
+    parser.add_argument('--action', action='store', dest='action', default='plot', help='Number of the trial')
+
 
     arguments = parser.parse_args()
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO,
@@ -330,11 +341,12 @@ def __main__():
 
     #compare_language_identification(arguments.filename,  "word_clusters_identified.txt",  "word_clusters.txt")
 
-    #tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname,
-    #                     per=float(arguments.p), thr=float(arguments.thresh), ntrial=int(arguments.ntrial),
-    #                     clf_name=arguments.clfname)
-
-    plot_scores()
+    if arguments.action == "classify":
+        tweet_classification(arguments.filename[0], int(arguments.size), int(arguments.window), arguments.dataname,
+                             per=float(arguments.p), thr=float(arguments.thresh), ntrial=int(arguments.ntrial),
+                             clf_name=arguments.clfname)
+    elif arguments.action == "plot":
+        plot_scores()
 
 if __name__ == "__main__":
     __main__()
