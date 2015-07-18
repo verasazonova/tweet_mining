@@ -251,6 +251,7 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
 
             w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv])] #, x_w2v
             w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window, min_count=1)
+            logging.info("Looking for model %s" % w2v_model_name)
             if os.path.isfile(w2v_model_name):
                 w2v_model = w2v_models.load_w2v(w2v_model_name)
                 logging.info("Model Loaded")
