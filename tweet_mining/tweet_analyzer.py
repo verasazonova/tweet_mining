@@ -197,7 +197,7 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
         scores[n * n_cv:(n + 1) * n_cv] = cross_validation.cross_val_score(clf, x_shuffled, y_shuffled, cv=skf,
                                                                            scoring='f1',
                                                                            fit_params=fit_parameters,
-                                                                           verbose=2, n_jobs=1)
+                                                                           verbose=0, n_jobs=4)
     #print scores, scores.mean(), scores.std()
     return scores.mean()
 
@@ -220,7 +220,7 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
     x_cv, y_cv, stoplist = make_x_y(filename)
 
     if ntrial is None or ntrial == -1:
-        n_trials = [1, 2]
+        n_trials = [1]
     else:
         n_trials = [ntrial]
     if per is None or per == -1:
@@ -258,6 +258,7 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
             else:
                 w2v_model = w2v_models.build_word2vec(w2v_corpus, size=s, window=window, min_count=1, dataname=dataname)
                 logging.info("Model created")
+            w2v_model.init_sims(replace=True)
 
 
             if clf_name == 'w2v':
@@ -267,7 +268,7 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
                     #x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
 
                     clf_pipeline = Pipeline([
-                            ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=0.99, no_below=1,
+                            ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=1.0, no_below=1,
                                                                       stoplist=[], type=type)),
                             ('clf', clf) ])
 

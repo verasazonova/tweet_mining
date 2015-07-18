@@ -96,6 +96,7 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
         self.no_below = no_below
         self.stoplist = stoplist
         self.type = type
+        self.no_dictionary = False
         logging.info("W2v averaged classifier %s " % self.w2v_model)
 
     def fit(self, X, y=None):
@@ -104,8 +105,11 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
         if self.w2v_model is None:
             self.w2v_model = w2v_models.build_word2vec(x_clean, size=100, window=10, min_count=1, dataname="test")
 
-        self.dictionary = corpora.Dictionary(x_clean)
-        self.dictionary.filter_extremes(no_above=self.no_above, no_below=self.no_below)
+        if self.no_below == 1 and self.no_above == 1:
+            self.no_dictionary = True
+        else:
+            self.dictionary = corpora.Dictionary(x_clean)
+            self.dictionary.filter_extremes(no_above=self.no_above, no_below=self.no_below)
 
         #self.cluster = DPGMM(n_components=30, covariance_type='diag', alpha=5,  n_iter=1000)
 
@@ -122,8 +126,11 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
         # Text processing: remove words outside the dictionary frequency boundaries
         # To check whether word is in the dictionary need to convert it to id first!!!!
-        x_processed = [[word for word in text if word in self.dictionary.token2id and word not in self.stoplist]
-                       for text in x_clean]
+        if self.no_dictionary:
+            x_processed = x_clean
+        else:
+            x_processed = [[word for word in text if word in self.dictionary.token2id and word not in self.stoplist]
+                          for text in x_clean]
 
         # W2V vectors averaging
         if self.w2v_model is not None:
