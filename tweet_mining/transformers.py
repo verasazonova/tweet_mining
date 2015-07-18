@@ -89,7 +89,7 @@ class W2VWeightedAveragedModel(BaseEstimator, TransformerMixin):
 
 class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
-    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None, type="avg"):
+    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None, type=None):
         self.w2v_model = w2v_model
         self.dictionary = None
         self.no_above = no_above
@@ -97,7 +97,7 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
         self.stoplist = stoplist
         self.type = type
         self.no_dictionary = False
-        logging.info("W2v averaged classifier %s " % self.w2v_model)
+        logging.info("W2v averaged classifier type %s model %s " % (self.type, self.w2v_model))
 
     def fit(self, X, y=None):
         x_clean = [tu.normalize_punctuation(text).split() for text in X]
@@ -134,7 +134,7 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
         # W2V vectors averaging
         if self.w2v_model is not None:
-            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed, self.type)
+            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed, type=self.type)
             logging.info("W2V Averaged: returning pre-processed data of shape %s" % (x_vector.shape, ))
         else:
             logging.info("W2V Averaged: no model was provided.")

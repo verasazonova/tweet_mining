@@ -217,7 +217,7 @@ def vectorize_tweet(w2v_model, tweet, type="avg"):
 
 
 
-def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None, type="avg"):
+def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None, type=None):
     logging.info("Vectorizing a corpus with %s" % type)
     size = w2v_model.layer1_size
     if len(tweet_corpus) > 0:

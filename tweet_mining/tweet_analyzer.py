@@ -197,7 +197,7 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
         scores[n * n_cv:(n + 1) * n_cv] = cross_validation.cross_val_score(clf, x_shuffled, y_shuffled, cv=skf,
                                                                            scoring='f1',
                                                                            fit_params=fit_parameters,
-                                                                           verbose=0, n_jobs=4)
+                                                                           verbose=0, n_jobs=1)
     #print scores, scores.mean(), scores.std()
     return scores.mean()
 
@@ -232,8 +232,6 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
     else:
         threshs = [thr]
 
-
-    sizes = [100, 300, 500, 1000]
     n=0
     thresh = 0
 
@@ -247,23 +245,21 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
 
     for p in ps: #
 
-        for s in sizes:
-
             #x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
             w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv])] #, x_w2v
-            w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=s, window=window, min_count=1)
+            w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window, min_count=1)
             if os.path.isfile(w2v_model_name):
                 w2v_model = w2v_models.load_w2v(w2v_model_name)
                 logging.info("Model Loaded")
             else:
-                w2v_model = w2v_models.build_word2vec(w2v_corpus, size=s, window=window, min_count=1, dataname=dataname)
+                w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
                 logging.info("Model created")
             w2v_model.init_sims(replace=True)
 
 
             if clf_name == 'w2v':
 
-                for type in ["avg", "std"]:
+                for type in ["std", "avg"]:
 
                     #x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
 
@@ -273,7 +269,7 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
                             ('clf', clf) ])
 
                     mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=1, n_cv=5)
-                    print n, type, s, p, thresh, len(x_cv), len(w2v_corpus), mean
+                    print n, type, size, p, thresh, len(x_cv), len(w2v_corpus), mean
 
 
                     with open(dataname + "_fscore.txt", 'a') as f:
