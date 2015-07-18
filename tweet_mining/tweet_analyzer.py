@@ -217,14 +217,14 @@ def make_x_y(filename):
 
 def tweet_classification(filename, size, window, dataname, per=None, thr=None, ntrial=None, clf_name='w2v'):
 
-    x_cv, y_cv, stoplist = make_x_y(filename)
+    x_full, y_full, stoplist = make_x_y(filename)
 
     if ntrial is None or ntrial == -1:
         n_trials = [1]
     else:
         n_trials = [ntrial]
     if per is None or per == -1:
-        ps = [0.01]
+        ps = [0.001]
     else:
         ps = [per]
     if thr is None or thr == -1:
@@ -246,6 +246,9 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
     for p in ps: #
 
             #x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
+            x_cv = x_full
+            y_cv = y_full
+
             w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv])] #, x_w2v
             w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window, min_count=1)
             if os.path.isfile(w2v_model_name):

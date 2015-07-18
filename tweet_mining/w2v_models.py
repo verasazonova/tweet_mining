@@ -206,11 +206,11 @@ def vectorize_tweet(w2v_model, tweet, type="avg"):
     else:
         data = np.concatenate(vec_list)
 
-    features = [data.mean(axis=0)]
     if type == "std":
-        features += data.std(axis=0)
+        vec = np.concatenate([data.mean(axis=0), data.std(axis=0)])  #, skew(data, axis=0)])
+    else:
+        vec = np.concatenate([data.mean(axis=0)])  #, skew(data, axis=0)])
 
-    vec = np.concatenate(features)  #, skew(data, axis=0)])
     vec = vec.reshape((1, len(vec)))
 
     return vec
