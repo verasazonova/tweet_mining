@@ -5,22 +5,27 @@ import os
 import os.path
 
 from six import string_types
+from sklearn.preprocessing import StandardScaler
 
+from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import skew
-
+from sklearn.mixture import DPGMM
+import pickle
 from tweet_mining.utils import textutils as tu
 from gensim.models.doc2vec import LabeledSentence
 from gensim.models import Word2Vec, Doc2Vec
 import re
 import collections
 
+from gensim.corpora import Dictionary
+
 import logging
 
 
 # **************** W2V relating functions ******************************
 
-def make_w2v_model_name(dataname, size, window, min_count):
-    return "w2v_model_%s_%i_%i_%i" % (dataname, size, window, min_count)
+def make_w2v_model_name(dataname, size, window, min_count, corpus_length):
+    return "w2v_model_%s_%i_%i_%i_%.2g" % (dataname, size, window, min_count, corpus_length)
 
 
 def make_d2v_model_name(dataname, size, window, type_str):
@@ -53,7 +58,7 @@ def build_word2vec(text_corpus, size=100, window=10, min_count=2, dataname="none
     w2v_model = Word2Vec(sentences=text_corpus, size=size, alpha=0.05, window=window, min_count=min_count, iter=20,
                          sample=1e-3, seed=1, workers=4, hs=1, min_alpha=0.0001, sg=1, negative=0, cbow_mean=0)
     logging.info("%s" % w2v_model)
-    w2v_model_name = make_w2v_model_name(dataname, size, window, min_count)
+    w2v_model_name = make_w2v_model_name(dataname, size, window, min_count, len(text_corpus))
     w2v_model.save(w2v_model_name)
 
     return w2v_model
@@ -188,7 +193,7 @@ def vectorize_tweet_old(w2v_model, tweet, weight_dict=None):
     return vec
 
 
-def vectorize_tweet(w2v_model, tweet, type="avg"):
+def vectorize_tweet(w2v_model, tweet, type="avg", clusterers=None, scaler=None):
     size = w2v_model.layer1_size
     #vec_size = 2*size
     #vec = np.zeros(size).reshape((1, size))
@@ -204,10 +209,25 @@ def vectorize_tweet(w2v_model, tweet, type="avg"):
         data = np.zeros(size).reshape((1, size))
 
     else:
-        data = np.concatenate(vec_list)
+        data = scaler.transform(np.concatenate(vec_list))
 
     if type == "std":
         vec = np.concatenate([data.mean(axis=0), data.std(axis=0)])  #, skew(data, axis=0)])
+    elif type == "cluster":
+        features = [data.mean(axis=0), data.std(axis=0)]
+        for clusterer in clusterers:
+            predictions = clusterer.predict(data)
+            features.append(np.bincount(predictions, minlength=clusterer.n_components))
+        vec = np.concatenate(features)
+    elif type == "sim":
+        #distances = cosine_similarity(data)
+        features = [data.mean(axis=0), data.std(axis=0), len(vec_list)]
+                    #[distances.mean()],
+                    #[distances.std()], [np.amin(distances)], [np.amax(distances)]]
+        #for clusterer in clusterers:
+        #    predictions = clusterer.predict(data)
+        #    features.append(np.bincount(predictions, minlength=clusterer.n_components))
+        vec = np.concatenate(features)
     else:
         vec = np.concatenate([data.mean(axis=0)])  #, skew(data, axis=0)])
 
@@ -217,14 +237,15 @@ def vectorize_tweet(w2v_model, tweet, type="avg"):
 
 
 
-def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None, type=None):
+def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None, type=None,
+                           clusterers=None, scaler=None):
     logging.info("Vectorizing a corpus with %s" % type)
     size = w2v_model.layer1_size
     if len(tweet_corpus) > 0:
         if dictionary is not None:
             vecs = np.concatenate([vectorize_bow_text(w2v_model, z, dictionary, tfidf=tfidf) for z in tweet_corpus])
         else:
-            vecs = np.concatenate([vectorize_tweet(w2v_model, z, type=type) for z in tweet_corpus])
+            vecs = np.concatenate([vectorize_tweet(w2v_model, z, type=type, clusterers=clusterers, scaler=scaler) for z in tweet_corpus])
     else:
         vecs = np.zeros(size).reshape((1, size))
     return vecs
@@ -249,6 +270,46 @@ def vectorize_bow_text(w2v_model, text, dictionary, tfidf=None):
         vec /= count
     return vec
 
+
+
+def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=None):
+
+    dictionary = Dictionary(w2v_corpus)
+    dictionary.filter_extremes(no_below=2, no_above=0.9, keep_n=9000)
+
+    size = w2v_model.layer1_size
+
+    word_list = [word for word in dictionary.token2id.iterkeys() if word in w2v_model]
+    vec_list = [w2v_model[word] for word in word_list]
+    scaler = StandardScaler()
+    scaler.fit(np.array(vec_list))
+    vecs = scaler.transform(np.array(vec_list))
+
+    cluster__name_base = "dpggm_model"
+
+    cluster_model_names = []
+
+    for n_comp in [n_components]:
+        cluster_model_name = "%s-%i" % (cluster__name_base, n_comp)
+
+        cluster = DPGMM(n_components=n_comp, covariance_type='diag', alpha=5, n_iter=1000, verbose=0)
+        cluster.fit(vecs)
+        #y_ = cluster.predict(vecs)
+        #for i, cluster_center in enumerate(cluster.means_):
+            #cluster_x = vecs[y_ == i]
+            #cluster_x_size = len(cluster_x)
+            #central_words = [word for word, _ in w2v_model.most_similar_cosmul(positive=[cluster_center], topn=5)]
+            #print "%i, %i   : %s" % (i, cluster_x_size, repr(central_words))
+
+        pickle.dump(cluster, open(cluster_model_name, 'wb'))
+        logging.info("Clusterer build %s" % cluster)
+
+        cluster_model_names.append(cluster_model_name)
+
+    scaler_model_name = cluster__name_base+"-scaler"
+    pickle.dump(scaler, open(scaler_model_name, 'wb'))
+
+    return cluster_model_names, scaler_model_name
 
 # **************** Spell checking relating functions ******************************
 

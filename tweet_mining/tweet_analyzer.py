@@ -1,6 +1,7 @@
 
 __author__ = 'verasazonova'
 
+import pickle
 import argparse
 import logging
 from operator import itemgetter
@@ -199,7 +200,7 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
                                                                            fit_params=fit_parameters,
                                                                            verbose=0, n_jobs=1)
     #print scores, scores.mean(), scores.std()
-    return scores.mean()
+    return scores
 
 #------------------
 
@@ -220,11 +221,11 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
     x_full, y_full, stoplist = make_x_y(filename)
 
     if ntrial is None or ntrial == -1:
-        n_trials = [1]
+        n_trials = [0, 1, 2, 3, 4]
     else:
         n_trials = [ntrial]
     if per is None or per == -1:
-        ps = [0.001]
+        ps = [0.001, 0.01, 0.1]
     else:
         ps = [per]
     if thr is None or thr == -1:
@@ -232,8 +233,10 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
     else:
         threshs = [thr]
 
-    n=0
-    thresh = 0
+
+    n_components = 30
+
+    vector_types = ["avg", "std", "cluster"]
 
     logging.info("Classifing for p= %s" % ps)
     logging.info("Classifing for ntrials = %s" % n_trials)
@@ -245,39 +248,53 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
 
     for p in ps: #
 
-            #x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
-            x_cv = x_full
-            y_cv = y_full
+        for n in n_trials:
 
-            w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv])] #, x_w2v
-            w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window, min_count=1)
-            logging.info("Looking for model %s" % w2v_model_name)
-            if os.path.isfile(w2v_model_name):
-                w2v_model = w2v_models.load_w2v(w2v_model_name)
-                logging.info("Model Loaded")
-            else:
-                w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1, dataname=dataname)
-                logging.info("Model created")
-            w2v_model.init_sims(replace=True)
-
+            x_unlabeled, x_cv, y_unlabeled, y_cv = train_test_split(x_full, y_full, test_size=p, random_state=n)
 
             if clf_name == 'w2v':
 
-                for type in ["std", "avg"]:
+                for thresh in threshs:
 
-                    #x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
+                    for vector_type in vector_types:
 
-                    clf_pipeline = Pipeline([
-                            ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model, no_above=1.0, no_below=1,
-                                                                      stoplist=[], type=type)),
-                            ('clf', clf) ])
+                        x_other, x_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
 
-                    mean = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=1, n_cv=5)
-                    print n, type, size, p, thresh, len(x_cv), len(w2v_corpus), mean
+                        w2v_corpus = [tu.normalize_punctuation(text).split() for text in np.concatenate([x_cv, x_w2v])]
+
+                        #w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window,
+                        #                                                min_count=1, corpus_length=len(w2v_corpus))
+                        #logging.info("Looking for model %s" % w2v_model_name)
+                        #if os.path.isfile(w2v_model_name):
+                            #w2v_model = w2v_models.load_w2v(w2v_model_name)
+                            #logging.info("Model Loaded")
+                        #else:
+                        w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=1,
+                                                              dataname=dataname)
+                        logging.info("Model created")
+                        w2v_model.init_sims(replace=True)
+
+                        cluster_model_names, scaler_name = w2v_models.build_dpgmm_model(w2v_corpus, w2v_model=w2v_model,
+                                                                                        n_components=n_components)
+                        #cluster_model_names = ["dpggm_model-30"]
+                        #scaler_name = "dpggm_model-scaler"
+
+                        clf_pipeline = Pipeline([
+                                ('w2v_avg', transformers.W2VAveragedModel(w2v_model=w2v_model,
+                                                                          cluster_model_names=cluster_model_names,
+                                                                          no_above=1.0, no_below=1,
+                                                                          scaler_name=scaler_name,
+                                                                          stoplist=[], type=vector_type)),
+                                ('clf', clf) ])
+
+                        scores = run_cv_classifier(x_cv, y_cv, clf=clf_pipeline, n_trials=1, n_cv=5)
+                        print n, vector_type, size, p, thresh, len(x_cv), len(w2v_corpus), scores.mean(), n_components
 
 
-                    with open(dataname + "_fscore.txt", 'a') as f:
-                        f.write("%i, %s, %i, %f, %f, %i, %i, %f \n" % (n, type, size, p, thresh, len(x_cv), len(w2v_corpus), mean))
+                        with open(dataname + "_fscore.txt", 'a') as f:
+                            for i, score in enumerate(scores):
+                                f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %i \n" %
+                                    (n, i, vector_type, size, p, thresh, len(x_cv), len(w2v_corpus), score, n_components))
 
 
             else:

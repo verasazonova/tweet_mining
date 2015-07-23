@@ -2,6 +2,7 @@ __author__ = 'verasazonova'
 
 import logging
 import numpy as np
+import pickle
 from sklearn.base import BaseEstimator, TransformerMixin
 import utils.textutils as tu
 from sklearn.mixture import DPGMM
@@ -89,17 +90,33 @@ class W2VWeightedAveragedModel(BaseEstimator, TransformerMixin):
 
 class W2VAveragedModel(BaseEstimator, TransformerMixin):
 
-    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None, type=None):
+    def __init__(self, w2v_model=None, cluster_model_names=None, no_below=2, no_above=0.9, stoplist=None, type=None,
+                 scaler_name=None):
         self.w2v_model = w2v_model
         self.dictionary = None
         self.no_above = no_above
         self.no_below = no_below
         self.stoplist = stoplist
         self.type = type
+        self.cluster_model_names = cluster_model_names
+        self.scaler_name = scaler_name
+        self.cluster = []
+        self.scaler = None
+
         self.no_dictionary = False
         logging.info("W2v averaged classifier type %s model %s " % (self.type, self.w2v_model))
 
     def fit(self, X, y=None):
+
+        if self.cluster_model_names is not None:
+            for name in self.cluster_model_names:
+                self.cluster.append(pickle.load(open(name, 'rb')))
+
+        if self.scaler_name is not None:
+            self.scaler = pickle.load(open(self.scaler_name, 'rb'))
+
+        logging.info("Loaded from file")
+
         x_clean = [tu.normalize_punctuation(text).split() for text in X]
 
         if self.w2v_model is None:
@@ -111,10 +128,8 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
             self.dictionary = corpora.Dictionary(x_clean)
             self.dictionary.filter_extremes(no_above=self.no_above, no_below=self.no_below)
 
-        #self.cluster = DPGMM(n_components=30, covariance_type='diag', alpha=5,  n_iter=1000)
-
-
         logging.info("W2V: got a model %s " % (self.w2v_model,))
+        logging.info("W2V: got a cluster %s " % (self.cluster,))
         return self
 
     # X is an array of tweets.  Just text
@@ -133,8 +148,10 @@ class W2VAveragedModel(BaseEstimator, TransformerMixin):
                           for text in x_clean]
 
         # W2V vectors averaging
+        logging.info("Clusterer %s " % self.cluster)
         if self.w2v_model is not None:
-            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed, type=self.type)
+            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed, type=self.type,
+                                                         clusterers=self.cluster, scaler=self.scaler)
             logging.info("W2V Averaged: returning pre-processed data of shape %s" % (x_vector.shape, ))
         else:
             logging.info("W2V Averaged: no model was provided.")
