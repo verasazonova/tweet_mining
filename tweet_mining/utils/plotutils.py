@@ -4,6 +4,7 @@ import matplotlib.colors as colors
 import matplotlib.cm as cmx
 import matplotlib.pyplot as plt
 import numpy as np
+from six import string_types
 import logging
 from sklearn.manifold import TSNE
 
@@ -109,10 +110,12 @@ def extract_xy_average(data, xind, yind, cind, cval):
 
     xvals = sorted(list(set(data_c[:, xind])))
     yvals = []
+    yerr = []
     for xval in xvals:
         i = data_c[:, xind] == xval
         yvals.append( data_c[i, yind].mean())
-    return np.array(xvals), np.array(yvals)
+        yerr.append( data_c[i, yind].std())
+    return np.array(xvals), np.array(yvals), np.array(yerr)
 
 
 def extract_conditions(data, conditions=None):
@@ -126,15 +129,29 @@ def extract_conditions(data, conditions=None):
 
     return data_c
 
-def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, conditions=None):
+def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, conditions=None, witherror=False):
 
     data = extract_conditions(data_raw, conditions)
 
     cvals = sorted(list(set(data[:, cind])))
     for cval in cvals:
-        xvals, yvals = extract_xy_average(data, xind, yind, cind, cval)
-        print cval, xvals, yvals
-        plt.plot(xvals, yvals, '-', marker=marker, color=cdict[cval], label=cval)
+        xvals, yvals, yerrs = extract_xy_average(data, xind, yind, cind, cval)
+
+        np.set_printoptions(precision=4) #formatter={'float': '{: 0.3f}'.format})
+        print cval, xvals, yvals, yerrs
+        # if no color is supplied use black
+        if cdict is None:
+            color = 'k'
+        # if cdict is a string - assume it is a color
+        elif isinstance(cdict, string_types):
+            color = cdict
+        # by default cdict is a dictionary of color-value pairs
+        else:
+            color = cdict[cval]
+        if witherror:
+            plt.errorbar(xvals, yvals, yerr=yerrs, fmt='-', marker=marker, color=color, label=cval)
+        else:
+            plt.plot(xvals, yvals, '-', marker=marker, color=color, label=cval)
 
 
 def extract_base(data, xind, yind, cind, cval):
@@ -167,25 +184,8 @@ def make_labels(title=""):
     plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(-2,2))
 
 
-def plot_curves_baseslines():
 
-
-    data_100 = np.loadtxt("w2v_f-scores-100-10.txt")
-    data_300 = np.loadtxt("w2v_f-scores-300-10.txt")
-    data_avg = np.loadtxt("w2v_avg_f-scores-300-10.txt")
-    data_bow = np.loadtxt("bow_f-scores-100-10.txt")
-
-    TYPES = {'avg': 0, 'std': 1, 'cluster':2}
-    converter = {1: lambda s: TYPES[s.strip()]}
-    data_cluster = np.loadtxt('w2v-f-score.txt', delimiter=',', converters=converter)
-    data_dpgmm = np.loadtxt("w2v-f-score_dpgmm_n.txt", delimiter=',', converters=converter)
-
-    cvals = sorted(list(set(np.concatenate([data_100[:, 2], data_300[:,2], data_avg[:, 2], data_bow[:, 1]]))))
-    cmap = get_cmap(len(cvals))
-    cdict = {}
-    for i, cval in enumerate(cvals):
-        cdict[cval] = cmap(i)
-
+def other():
     plt.figure()
     plot_multiple_xy_averages(data_100, 5, 6, 2, 'o', cdict=cdict)
     plot_multiple_bases(data_bow, 2, 3, 1, cdict=cdict)
@@ -244,4 +244,62 @@ def plot_curves_baseslines():
     plt.ylabel("F-Score")
     plt.xlabel("DPGMM number of components")
     plt.savefig("w2v_01_dpgmm.pdf")
+
+def plot_curves_baseslines():
+
+    data_100 = np.loadtxt("w2v_f-scores-100-10.txt")
+    data_300 = np.loadtxt("w2v_f-scores-300-10.txt")
+    data_avg = np.loadtxt("w2v_avg_f-scores-300-10.txt")
+    data_bow = np.loadtxt("bow_f-scores-100-10.txt")
+
+    TYPES = {'avg': 0, 'std': 1, 'cluster':2}
+    converter = {2: lambda s: TYPES[s.strip()]}
+
+    #data_cluster = np.loadtxt('w2v-f-score.txt', delimiter=',', converters=converter)
+    #data_dpgmm = np.loadtxt("w2v-f-score_dpgmm_n.txt", delimiter=',', converters=converter)
+
+    data_recent = np.loadtxt("sent2_fscore.txt", delimiter=',', converters=converter)
+
+    cvals = sorted(list(set(np.concatenate([data_100[:, 2], data_300[:,2], data_avg[:, 2], data_bow[:, 1]]))))
+    cmap = get_cmap(len(cvals))
+    cdict = {}
+    for i, cval in enumerate(cvals):
+        cdict[cval] = cmap(i)
+
+
+    plot_multiple_xy_averages(data_recent, 7, 8, 4, 's', cdict=cdict, conditions=[(2, TYPES['avg'])])
+    plot_multiple_xy_averages(data_recent, 7, 8, 4, 'v', cdict=cdict, conditions=[(2, TYPES['std'])])
+    plot_multiple_xy_averages(data_recent, 7, 8, 4, '<', cdict=cdict, conditions=[(2, TYPES['cluster'])])
+    plot_multiple_bases(data_bow, 2, 3, 1, cdict=cdict)
+    make_labels("W2V different features")
+    plt.savefig("w2v.pdf")
+
+
+def plot_kenyan_data():
+
+    TYPES = {'avg': 0, 'std': 1, 'cluster':2, 'bow':3}
+    converter = {2: lambda s: TYPES[s.strip()]}
+
+    #data_cluster = np.loadtxt('w2v-f-score.txt', delimiter=',', converters=converter)
+    #data_dpgmm = np.loadtxt("w2v-f-score_dpgmm_n.txt", delimiter=',', converters=converter)
+
+    #data_makaburi = np.loadtxt("makaburi_fscore.txt", delimiter=',', converters=converter)
+    data_lr = np.loadtxt("mpeketoni_lr_fscore.txt", delimiter=',', converters=converter)
+    data_svm = np.loadtxt("mpeketoni_svm_fscore.txt", delimiter=',', converters=converter)
+    #data_makaburi = np.loadtxt("mandera_makaburi_fscore.txt", delimiter=',', converters=converter)
+    #data_all = np.loadtxt("mandera_all_fscore.txt", delimiter=',', converters=converter)
+
+#    cvals = sorted(list(set(data_mandera[:, ])))
+#    cmap = get_cmap(len(cvals))
+#    cdict = {}
+#    for i, cval in enumerate(cvals):
+#        cdict[cval] = cmap(i)
+
+
+    #plot_multiple_xy_averages(data_makaburi, 2, 8, 3, 's', cdict='r', witherror=False)
+    plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
+    plot_multiple_xy_averages(data_svm, 2, 8, 3, 's', cdict='b', witherror=False)
+    #plot_multiple_xy_averages(data_makaburi, 2, 8, 3, 's', cdict='y', witherror=False)
+    #plot_multiple_xy_averages(data_all, 2, 8, 3, 's', cdict='g', witherror=False)
+    plt.savefig("w2v.pdf")
 

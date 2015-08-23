@@ -6,6 +6,7 @@ import os.path
 
 from six import string_types
 from sklearn.preprocessing import StandardScaler
+import codecs
 
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import skew
@@ -209,14 +210,14 @@ def vectorize_tweet(w2v_model, tweet, type="avg", clusterers=None, scaler=None):
         data = np.zeros(size).reshape((1, size))
 
     else:
-        data = scaler.transform(np.concatenate(vec_list))
+        data = np.concatenate(vec_list)
 
     if type == "std":
         vec = np.concatenate([data.mean(axis=0), data.std(axis=0)])  #, skew(data, axis=0)])
     elif type == "cluster":
         features = [data.mean(axis=0), data.std(axis=0)]
         for clusterer in clusterers:
-            predictions = clusterer.predict(data)
+            predictions = clusterer.predict(scaler.transform(data))
             features.append(np.bincount(predictions, minlength=clusterer.n_components))
         vec = np.concatenate(features)
     elif type == "sim":
@@ -234,7 +235,6 @@ def vectorize_tweet(w2v_model, tweet, type="avg", clusterers=None, scaler=None):
     vec = vec.reshape((1, len(vec)))
 
     return vec
-
 
 
 def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None, type=None,
@@ -271,15 +271,21 @@ def vectorize_bow_text(w2v_model, text, dictionary, tfidf=None):
     return vec
 
 
-
-def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=None):
+def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=None, no_above=0.8, no_below=2, dataname=""):
 
     dictionary = Dictionary(w2v_corpus)
-    dictionary.filter_extremes(no_below=2, no_above=0.9, keep_n=9000)
+    dictionary.filter_extremes(no_below=no_below, no_above=no_above, keep_n=9000)
 
     size = w2v_model.layer1_size
 
     word_list = [word for word in dictionary.token2id.iterkeys() if word in w2v_model]
+
+    # saving word representations
+    with codecs.open("%s_%f_%f_w2v_rep.txt" % (dataname, no_above, no_below), 'w', encoding="utf-8") as fout:
+        for word in word_list:
+            fout.write(word + "," + ",".join(["%.8f" % x for x in w2v_model[word]]) + "\n")
+
+
     vec_list = [w2v_model[word] for word in word_list]
     scaler = StandardScaler()
     scaler.fit(np.array(vec_list))
@@ -294,12 +300,13 @@ def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=None):
 
         cluster = DPGMM(n_components=n_comp, covariance_type='diag', alpha=5, n_iter=1000, verbose=0)
         cluster.fit(vecs)
-        #y_ = cluster.predict(vecs)
-        #for i, cluster_center in enumerate(cluster.means_):
-            #cluster_x = vecs[y_ == i]
-            #cluster_x_size = len(cluster_x)
-            #central_words = [word for word, _ in w2v_model.most_similar_cosmul(positive=[cluster_center], topn=5)]
-            #print "%i, %i   : %s" % (i, cluster_x_size, repr(central_words))
+        y_ = cluster.predict(vecs)
+        for i, cluster_center in enumerate(cluster.means_):
+            cluster_x = vecs[y_ == i]
+            cluster_x_size = len(cluster_x)
+            if cluster_x_size > 0:
+                central_words = [word for word, _ in w2v_model.most_similar_cosmul(positive=[cluster_center], topn=5)]
+                print "%i, %i   : %s" % (i, cluster_x_size, repr(central_words))
 
         pickle.dump(cluster, open(cluster_model_name, 'wb'))
         logging.info("Clusterer build %s" % cluster)
@@ -310,6 +317,20 @@ def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=None):
     pickle.dump(scaler, open(scaler_model_name, 'wb'))
 
     return cluster_model_names, scaler_model_name
+
+
+def save_w2v_words_representations(w2v_model, corpus, no_above=0.9, no_below=2, dataname=""):
+
+    dictionary = Dictionary(corpus)
+    dictionary.filter_extremes(no_below=no_below, no_above=no_above, keep_n=9000)
+
+    word_list = [word for word in dictionary.token2id.iterkeys() if word in w2v_model]
+
+    with open("%s_%f_%f_w2v_rep.txt" % (dataname, no_above, no_below), 'w') as fout:
+        for word in word_list:
+            fout.write(word + "," + ",".join(w2v_model[word])+"\n")
+
+
 
 # **************** Spell checking relating functions ******************************
 

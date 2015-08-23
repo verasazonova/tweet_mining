@@ -223,3 +223,19 @@ def unicode_csv_reader(unicode_csv_data, dialect=csv.excel, **kwargs):
 def utf_8_encoder(unicode_csv_data):
     for line in unicode_csv_data:
         yield line.encode('utf-8', errors='replace')
+
+
+
+def make_positive_labeled_kenyan_data(dataname):
+    dataset_positive = KenyanCSVMessage(dataname+"_positive.csv", fields=["text"])
+    data_positive = [tweet[dataset_positive.text_pos] for tweet in dataset_positive]
+
+    dataset = KenyanCSVMessage(dataname+".csv", fields=["text"])
+
+    with codecs.open(dataname+"_annotated_positive.csv", 'w', encoding='utf-8') as fout:
+        fout.write("text,label\n")
+        for tweet in dataset:
+            if tweet[dataset.text_pos] in data_positive:
+                fout.write("\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",T\n")
+            else:
+                fout.write("\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",F\n")

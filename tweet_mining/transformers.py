@@ -6,6 +6,8 @@ import pickle
 from sklearn.base import BaseEstimator, TransformerMixin
 import utils.textutils as tu
 from sklearn.mixture import DPGMM
+from gensim.corpora import Dictionary
+from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import scale
 from gensim import corpora, models, matutils
 import re
@@ -230,3 +232,59 @@ class LDAModel(BaseEstimator, TransformerMixin):
         bow_corpus = [self.dictionary.doc2bow(text) for text in X]
         x_data = matutils.corpus2dense(self.model[bow_corpus], num_terms=self.topn).T
         return x_data
+
+
+class W2V_Clusterer(BaseEstimator, TransformerMixin):
+
+    def __init__(self, n_components=None, w2v_model=None, no_below=1, no_above=1.0):
+        self.n_components = n_components
+        self.w2v_model = w2v_model
+        self.scaler = None
+        self.clusterer = None
+        self.no_below = no_below
+        self.no_above = no_above
+        self.dictionary = None
+        self.keep_n = 9000
+
+    # X is the corpus to build the cluster
+    def fit(self, X, y=None):
+        dictionary = Dictionary(X)
+        dictionary.filter_extremes(no_below=self.no_below, no_above=self.no_above, keep_n=self.keep_n)
+
+        size = self.w2v_model.layer1_size
+
+        word_list = [word for word in dictionary.token2id.iterkeys() if word in self.w2v_model]
+        vec_list = [self.w2v_model[word] for word in word_list]
+        self.scaler = StandardScaler()
+        self.scaler.fit(np.array(vec_list))
+        vecs = self.scaler.transform(np.array(vec_list))
+
+        cluster__name_base = "dpggm_model"
+
+        cluster_model_names = []
+
+        cluster_model_name = "%s-%i" % (cluster__name_base, self.n_components)
+
+        self.clusterer = DPGMM(n_components=self.n_components, covariance_type='diag', alpha=5, n_iter=1000, verbose=0)
+        self.clusterer.fit(vecs)
+        y_ = self.clusterer.predict(vecs)
+        for i, cluster_center in enumerate(self.clusterer.means_):
+            cluster_x = vecs[y_ == i]
+            cluster_x_size = len(cluster_x)
+            central_words = [word for word, _ in self.w2v_model.most_similar_cosmul(positive=[cluster_center], topn=5)]
+            print "%i, %i   : %s" % (i, cluster_x_size, repr(central_words))
+
+        pickle.dump(self.clusterer, open(cluster_model_name, 'wb'))
+        logging.info("Clusterer build %s" % self.clusterer)
+
+        cluster_model_names.append(cluster_model_name)
+
+        scaler_model_name = cluster__name_base+"-scaler"
+        pickle.dump(self.scaler, open(scaler_model_name, 'wb'))
+
+        return self
+
+    def transform(self, X):
+        features = []
+        predictions = self.clusterer.predict(self.scaler.transform(X))
+        features.append(np.bincount(predictions, minlength=self.clusterer.n_components))
