@@ -21,6 +21,6 @@ OUTPUT=$DNAME".txt"
 touch $OUTPUT
 python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 5  --window 10 --nclusters 30 --clfname w2v  --clfbase lr  --action classify --rebuild >> $OUTPUT
 #python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 5  --window 10 --nclusters 30 --clfname bow  --clfbase lr  --action classify >> $OUTPUT
-python $MAIN_PY --dname $DNAME --action plot
+python $MAIN_PY --dname $DNAME --action plot >> $OUTPUT
 
 popd
