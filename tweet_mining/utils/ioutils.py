@@ -73,7 +73,7 @@ def read_tweets(filename, fields):
     return data
 
 
-def clean_tweets(data, fields, keep_all=False):
+def clean_tweets(data, fields):
     """
     Normalzes the text of the tweets to remove newlines.
     Sorts the tweets by the date
@@ -116,6 +116,10 @@ def clean_tweets(data, fields, keep_all=False):
         logging.info("Data sorted by date.  Span: %s - %s" % (data_sorted[0][date_pos], data_sorted[-1][date_pos]))
     else:
         data_sorted = data
+
+    logging.info("Data pre-processed")
+    logging.info("First line: %s" % data_sorted[0])
+    logging.info("Last line: %s" % data_sorted[-1])
 
     return data_sorted, date_pos, text_pos, id_pos, label_pos
 
@@ -162,7 +166,8 @@ class KenyanCSVMessage():
         else:
             self.stoplist = []
 
-        self.data, self.date_pos, self.text_pos, self.id_pos, self.label_pos = clean_tweets(read_tweets(self.filename, self.fields), self.fields)
+        self.data, self.date_pos, self.text_pos, self.id_pos, self.label_pos = \
+            clean_tweets(read_tweets(self.filename, self.fields), self.fields)
         self.data = np.array(self.data)
         if start_date is None:
             self.start_date = self.data[0][self.date_pos]
@@ -223,7 +228,6 @@ def unicode_csv_reader(unicode_csv_data, dialect=csv.excel, **kwargs):
 def utf_8_encoder(unicode_csv_data):
     for line in unicode_csv_data:
         yield line.encode('utf-8', errors='replace')
-
 
 
 def make_positive_labeled_kenyan_data(dataname):

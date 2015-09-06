@@ -5,6 +5,7 @@ import matplotlib.cm as cmx
 import matplotlib.pyplot as plt
 import numpy as np
 from six import string_types
+from os.path import isfile
 import logging
 from sklearn.manifold import TSNE
 
@@ -275,17 +276,15 @@ def plot_curves_baseslines():
     plt.savefig("w2v.pdf")
 
 
-def plot_kenyan_data():
+def plot_kenyan_data(dataname):
 
-    TYPES = {'avg': 0, 'std': 1, 'cluster':2, 'bow':3}
+    TYPES = {'avg': 0, 'std': 1, 'cluster':2, 'bow':3, 'diff':4}
     converter = {2: lambda s: TYPES[s.strip()]}
 
     #data_cluster = np.loadtxt('w2v-f-score.txt', delimiter=',', converters=converter)
     #data_dpgmm = np.loadtxt("w2v-f-score_dpgmm_n.txt", delimiter=',', converters=converter)
 
     #data_makaburi = np.loadtxt("makaburi_fscore.txt", delimiter=',', converters=converter)
-    data_lr = np.loadtxt("mpeketoni_lr_fscore.txt", delimiter=',', converters=converter)
-    data_svm = np.loadtxt("mpeketoni_svm_fscore.txt", delimiter=',', converters=converter)
     #data_makaburi = np.loadtxt("mandera_makaburi_fscore.txt", delimiter=',', converters=converter)
     #data_all = np.loadtxt("mandera_all_fscore.txt", delimiter=',', converters=converter)
 
@@ -296,9 +295,15 @@ def plot_kenyan_data():
 #        cdict[cval] = cmap(i)
 
 
+    if isfile(dataname + "_lr_fscore.txt"):
+        data_lr = np.loadtxt(dataname + "_lr_fscore.txt", delimiter=',', converters=converter)
+        plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
+
+    if isfile(dataname + "_svm_fscore.txt"):
+        data_svm = np.loadtxt(dataname+ "_svm_fscore.txt", delimiter=',', converters=converter)
+        plot_multiple_xy_averages(data_svm, 2, 8, 3, 's', cdict='b', witherror=False)
+
     #plot_multiple_xy_averages(data_makaburi, 2, 8, 3, 's', cdict='r', witherror=False)
-    plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
-    plot_multiple_xy_averages(data_svm, 2, 8, 3, 's', cdict='b', witherror=False)
     #plot_multiple_xy_averages(data_makaburi, 2, 8, 3, 's', cdict='y', witherror=False)
     #plot_multiple_xy_averages(data_all, 2, 8, 3, 's', cdict='g', witherror=False)
     plt.savefig("w2v.pdf")

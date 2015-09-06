@@ -1,15 +1,11 @@
 __author__ = 'verasazonova'
 
 import numpy as np
-import os
-import os.path
 
 from six import string_types
 from sklearn.preprocessing import StandardScaler
 import codecs
 
-from sklearn.metrics.pairwise import cosine_similarity
-from scipy.stats import skew
 from sklearn.mixture import DPGMM
 import pickle
 from tweet_mining.utils import textutils as tu
@@ -33,7 +29,7 @@ def make_d2v_model_name(dataname, size, window, type_str):
     return "d2v_model_%s_%s_%i_%i" % (dataname, type_str, size, window)
 
 
-def build_word2vec(text_corpus, size=100, window=10, min_count=2, dataname="none"):
+def build_word2vec(text_corpus, size=100, window=10, min_count=2, dataname="none", shuffle=False):
     """
     Given a text corpus build a word2vec model
     :param size:
@@ -55,14 +51,33 @@ def build_word2vec(text_corpus, size=100, window=10, min_count=2, dataname="none
     #w2v_model = Word2Vec(sentences=text_corpus, size=size, alpha=0.025, window=window, min_count=min_count, iter=20,
     #                     sample=1e-3, seed=1, workers=4, hs=1, min_alpha=0.0001, sg=1, negative=1e-4, cbow_mean=0)
 
+    if shuffle:
+        w2v_model = Word2Vec(size=size, alpha=0.05, window=window, min_count=min_count, iter=1,
+                             sample=1e-3, seed=1, workers=4, hs=1, min_alpha=0.0001, sg=1, cbow_mean=0)
+        w2v_model.build_vocab(text_corpus)
+        w2v_model.iter = 1
+        for epoch in range(20):
+            perm = np.random.permutation(text_corpus.shape[0])
+            w2v_model.train(text_corpus[perm])
+    else:
+        w2v_model = Word2Vec(sentences=text_corpus, size=size, alpha=0.05, window=window, min_count=min_count, iter=20,
+                             sample=1e-3, seed=1, workers=4, hs=1, min_alpha=0.0001, sg=1, cbow_mean=0)
 
-    w2v_model = Word2Vec(sentences=text_corpus, size=size, alpha=0.05, window=window, min_count=min_count, iter=20,
-                         sample=1e-3, seed=1, workers=4, hs=1, min_alpha=0.0001, sg=1, negative=0, cbow_mean=0)
     logging.info("%s" % w2v_model)
     w2v_model_name = make_w2v_model_name(dataname, size, window, min_count, len(text_corpus))
     w2v_model.save(w2v_model_name)
 
     return w2v_model
+
+# test the quality of the w2v model by extracting mist similar words to ensemble of words
+def test_w2v(w2v_model, word_list=None, neg_list=None):
+    if word_list is None or not word_list:
+        return []
+    elif neg_list is None or not neg_list:
+        list_similar = w2v_model.most_similar_cosmul(positive=word_list)
+    else:
+        list_similar = w2v_model.most_similar_cosmul(positive=word_list, negative=neg_list)
+    return list_similar
 
 
 def build_doc2vec(dataset, size=100, window=10, dataname="none"):
@@ -112,89 +127,7 @@ def build_doc2vec(dataset, size=100, window=10, dataname="none"):
     return d2v_model_dm, d2v_model_dbow
 
 
-def load_w2v(w2v_model_name):
-    if os.path.isfile(w2v_model_name):
-        w2v_model = Word2Vec.load(w2v_model_name)
-        logging.info("Model %s loaded" % w2v_model_name)
-        return w2v_model
-    return None
-
-
-def apply_w2v(word_list, w2v_model=None):
-    """
-    If the W2v model exists, apply it to the BOW corpus and return topic assignments
-    :param word_list: list of words to investigate
-    :param w2v_model: lda_model
-    :return: a list of topic assignments
-    """
-
-    if w2v_model is not None:
-        for word in word_list:
-            if word in w2v_model:
-                print "%s:\t\t%s" % (word,
-                                     ", ".join([word for word, _ in w2v_model.most_similar(positive=[word], topn=10)]))
-
-
-def test_w2v(w2v_model=None, word_list=None, neg_list=None):
-
-    if w2v_model is None:
-        logging.info("No model supplied")
-        return None
-
-    if word_list is not None:
-        word_list = [word for word in word_list if word in w2v_model]
-        print " ".join(word_list),
-    else:
-        word_list = []
-    if neg_list is not None:
-        print " - " + " ".join(neg_list),
-        print ":"
-        neg_list = [word for word in neg_list if word in w2v_model]
-    else:
-        neg_list = []
-
-    if word_list:
-        return w2v_model.most_similar_cosmul(positive=word_list, negative=neg_list, topn=10)
-    else:
-        return []
-
-
-def create_word_vecs(word_list, size=100, w2v_model=None):
-    word_vecs = np.zeros((len(word_list), size))
-    for i, word in enumerate(word_list):
-        if word in w2v_model:
-            word_vecs[i] = w2v_model[word]
-    return word_vecs
-
-
-def vectorize_tweet_old(w2v_model, tweet, weight_dict=None):
-    size = w2v_model.layer1_size
-    vec = np.zeros(size).reshape((1, size))
-    count = 0.
-    # allow one word vectorization without encapsulation by an array
-    if isinstance(tweet, string_types):
-        tweet = [tweet]
-    for word in tweet:
-        try:
-            if weight_dict is None:
-                vec += w2v_model[word].reshape((1, size))
-                count += 1.
-            else:
-                if word in weight_dict:
-                    weight = weight_dict[word]
-                else:
-                    weight = 1
-                vec += w2v_model[word].reshape((1, size)) * weight
-                count += weight
-
-        except KeyError:
-            continue
-    if count != 0:
-        vec /= count
-    return vec
-
-
-def vectorize_tweet(w2v_model, tweet, type="avg", clusterers=None, scaler=None):
+def vectorize_tweet(w2v_model, tweet, dpgmm=None, scaler=None):
     size = w2v_model.layer1_size
     #vec_size = 2*size
     #vec = np.zeros(size).reshape((1, size))
@@ -204,7 +137,7 @@ def vectorize_tweet(w2v_model, tweet, type="avg", clusterers=None, scaler=None):
         tweet = [tweet]
 
     # get a matrix of w2v vectors
-    vec_list = [w2v_model[word].reshape((1,size)) for word in tweet if word in w2v_model]
+    vec_list = [w2v_model[word].reshape((1, size)) for word in tweet if word in w2v_model]
 
     if not vec_list:
         data = np.zeros(size).reshape((1, size))
@@ -212,40 +145,26 @@ def vectorize_tweet(w2v_model, tweet, type="avg", clusterers=None, scaler=None):
     else:
         data = np.concatenate(vec_list)
 
-    if type == "std":
-        vec = np.concatenate([data.mean(axis=0), data.std(axis=0)])  #, skew(data, axis=0)])
-    elif type == "cluster":
-        features = [data.mean(axis=0), data.std(axis=0)]
-        for clusterer in clusterers:
-            predictions = clusterer.predict(scaler.transform(data))
-            features.append(np.bincount(predictions, minlength=clusterer.n_components))
-        vec = np.concatenate(features)
-    elif type == "sim":
-        #distances = cosine_similarity(data)
-        features = [data.mean(axis=0), data.std(axis=0), len(vec_list)]
-                    #[distances.mean()],
-                    #[distances.std()], [np.amin(distances)], [np.amax(distances)]]
-        #for clusterer in clusterers:
-        #    predictions = clusterer.predict(data)
-        #    features.append(np.bincount(predictions, minlength=clusterer.n_components))
-        vec = np.concatenate(features)
-    else:
-        vec = np.concatenate([data.mean(axis=0)])  #, skew(data, axis=0)])
+    #data_shifted[:,0:2] = 0
+    features = [np.median(data, axis=0), np.std(data, axis=0), np.median(np.diff(data, axis=1), axis=0)]
+    predictions = dpgmm.predict(scaler.transform(data))
+    features.append(np.bincount(predictions, minlength=dpgmm.n_components))
+    vec = np.concatenate(features)
 
     vec = vec.reshape((1, len(vec)))
 
     return vec
 
 
-def vectorize_tweet_corpus(w2v_model, tweet_corpus, weight_dict=None, dictionary=None, tfidf=None, type=None,
-                           clusterers=None, scaler=None):
-    logging.info("Vectorizing a corpus with %s" % type)
+def vectorize_tweet_corpus(w2v_model, tweet_corpus, dictionary=None, tfidf=None,
+                           dpgmm=None, scaler=None):
+    logging.info("Vectorizing a corpus")
     size = w2v_model.layer1_size
     if len(tweet_corpus) > 0:
         if dictionary is not None:
             vecs = np.concatenate([vectorize_bow_text(w2v_model, z, dictionary, tfidf=tfidf) for z in tweet_corpus])
         else:
-            vecs = np.concatenate([vectorize_tweet(w2v_model, z, type=type, clusterers=clusterers, scaler=scaler) for z in tweet_corpus])
+            vecs = np.concatenate([vectorize_tweet(w2v_model, z, dpgmm=dpgmm, scaler=scaler) for z in tweet_corpus])
     else:
         vecs = np.zeros(size).reshape((1, size))
     return vecs
@@ -271,69 +190,64 @@ def vectorize_bow_text(w2v_model, text, dictionary, tfidf=None):
     return vec
 
 
-def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=None, no_above=0.8, no_below=2, dataname=""):
+def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=None, no_above=0.9, no_below=8, dataname="",
+                      stoplist=None):
 
     dictionary = Dictionary(w2v_corpus)
     dictionary.filter_extremes(no_below=no_below, no_above=no_above, keep_n=9000)
 
-    size = w2v_model.layer1_size
-
-    word_list = [word for word in dictionary.token2id.iterkeys() if word in w2v_model]
+    # construct a list of words to cluster
+    # remove rare and frequent words
+    # remove words of length 1
+    # remove stopwords
+    word_list = np.array([word for word in dictionary.token2id.iterkeys()
+                          if word in w2v_model and len(word) > 1 and (stoplist is None or word not in stoplist)])
 
     # saving word representations
-    with codecs.open("%s_%f_%f_w2v_rep.txt" % (dataname, no_above, no_below), 'w', encoding="utf-8") as fout:
+    # word, w2v vector
+    with codecs.open("w2v_vocab_%s_%f_%f.lcsv" % (dataname, no_above, no_below), 'w', encoding="utf-8") as fout:
         for word in word_list:
             fout.write(word + "," + ",".join(["%.8f" % x for x in w2v_model[word]]) + "\n")
 
-
     vec_list = [w2v_model[word] for word in word_list]
     scaler = StandardScaler()
-    scaler.fit(np.array(vec_list))
-    vecs = scaler.transform(np.array(vec_list))
+    vecs = scaler.fit_transform(np.array(vec_list))
 
-    cluster__name_base = "dpggm_model"
+    cluster_name_base = "dpggm_model_%s" % dataname
 
-    cluster_model_names = []
+    cluster_model_name = "%s-%i" % (cluster_name_base, n_components)
 
-    for n_comp in [n_components]:
-        cluster_model_name = "%s-%i" % (cluster__name_base, n_comp)
-
-        cluster = DPGMM(n_components=n_comp, covariance_type='diag', alpha=5, n_iter=1000, verbose=0)
-        cluster.fit(vecs)
-        y_ = cluster.predict(vecs)
-        for i, cluster_center in enumerate(cluster.means_):
+    clusterer = DPGMM(n_components=n_components, covariance_type='diag', alpha=10, n_iter=100, tol=0.0001)
+    clusterer.fit(vecs)
+    print clusterer.converged_
+    y_ = clusterer.predict(vecs)
+    with codecs.open("clusters_%s_%i_%.2f_%.0f.txt" % (dataname, n_components, no_above, no_below), 'w',
+                     encoding="utf-8") as fout:
+        for i, cluster_center in enumerate(clusterer.means_):
             cluster_x = vecs[y_ == i]
+            words = word_list[y_ == i]
             cluster_x_size = len(cluster_x)
             if cluster_x_size > 0:
-                central_words = [word for word, _ in w2v_model.most_similar_cosmul(positive=[cluster_center], topn=5)]
-                print "%i, %i   : %s" % (i, cluster_x_size, repr(central_words))
+                cluster_center_original = scaler.inverse_transform(cluster_center)
+                central_words = [word for word, _ in w2v_model.most_similar_cosmul(positive=[cluster_center_original],
+                                                                                   topn=cluster_x_size) if word in words]
 
-        pickle.dump(cluster, open(cluster_model_name, 'wb'))
-        logging.info("Clusterer build %s" % cluster)
+                fout.write("%2i, %5i,   : " % (i, cluster_x_size))
+                for j, word in enumerate(central_words):
+                    if j < 10:
+                        fout.write("%s " % word)
+                fout.write("\n")
 
-        cluster_model_names.append(cluster_model_name)
+    pickle.dump(clusterer, open(cluster_model_name, 'wb'))
+    logging.info("Clusterer build %s" % clusterer)
 
-    scaler_model_name = cluster__name_base+"-scaler"
+    scaler_model_name = cluster_name_base+"-scaler"
     pickle.dump(scaler, open(scaler_model_name, 'wb'))
 
-    return cluster_model_names, scaler_model_name
-
-
-def save_w2v_words_representations(w2v_model, corpus, no_above=0.9, no_below=2, dataname=""):
-
-    dictionary = Dictionary(corpus)
-    dictionary.filter_extremes(no_below=no_below, no_above=no_above, keep_n=9000)
-
-    word_list = [word for word in dictionary.token2id.iterkeys() if word in w2v_model]
-
-    with open("%s_%f_%f_w2v_rep.txt" % (dataname, no_above, no_below), 'w') as fout:
-        for word in word_list:
-            fout.write(word + "," + ",".join(w2v_model[word])+"\n")
-
+    return clusterer, scaler
 
 
 # **************** Spell checking relating functions ******************************
-
 def words(text):
     return re.findall('[a-z]+', text.lower())
 

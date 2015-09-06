@@ -10,26 +10,31 @@ import logging
 # assumes unicode strings
 def normalize_punctuation(phrase, url=True, username=True, hashtag=True, punctuation=True, RT=False):
     norm_phrase = phrase.lower().strip()
-    #delete url
-    if url:
-        norm_phrase = re.sub(r'http(\S*)\b', "URL", norm_phrase)
 
-    #delete usernames
+    #replace url by tag URL
+    if url:
+        norm_phrase = re.sub(r'http(\S*)\b', " URL ", norm_phrase)
+
+    #replace usernames by tag USER
     if username:
-        norm_phrase = re.sub(r'@(\w*)\b', "USER", norm_phrase)
+        norm_phrase = re.sub(r'@(\w*)\b', " USER ", norm_phrase)
 
     #delete RT
     if RT:
         norm_phrase = re.sub(r'\bRT\b', '', norm_phrase)
 
-    #delete #
-    if hashtag:
-        norm_phrase = re.sub(r'#', '', norm_phrase)
-
+    # separate punctuation by space
     if punctuation:
         for punctuation_char in [',', ':', '.', '(', ')', '!', '?', ':', ';', '/', '\"', '*', '^', '\'',
-                                 u"\u2026", u"\u2013", '_', '[', ']', '+', '-']:
+                                 '_', '[', ']', '+', '-']:
             norm_phrase = norm_phrase.replace(punctuation_char, ' ' + punctuation_char+' ')
+
+    #delete #
+    if hashtag:
+        norm_phrase = re.sub(r'#', ' ', norm_phrase)
+
+    # replace multiple spaces by one
+    norm_phrase = re.sub(r'( )+', ' ', norm_phrase)
 
     return norm_phrase
 
