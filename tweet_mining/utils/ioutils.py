@@ -243,3 +243,22 @@ def make_positive_labeled_kenyan_data(dataname):
                 fout.write("\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",T\n")
             else:
                 fout.write("\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",F\n")
+
+
+def save_words_representations(filename, word_list, vec_list):
+    # saving word representations
+    # word, w2v vector
+    with codecs.open(filename, 'w', encoding="utf-8") as fout:
+        for word, vec in zip(word_list, vec_list):
+            fout.write(word + "," + ",".join(["%.8f" % x for x in vec]) + "\n")
+
+
+# save cluster information: size and central words
+def save_cluster_info(filename, cluster_info):
+    with codecs.open(filename, 'w', encoding="utf-8") as fout:
+        for cluster_dict in cluster_info:
+            fout.write("%2i, %5i,   : " % (cluster_dict['cnt'], cluster_dict['size']))
+            for j, word in enumerate(cluster_dict['words']):
+                if j < 10:
+                    fout.write("%s " % word)
+            fout.write("\n")
