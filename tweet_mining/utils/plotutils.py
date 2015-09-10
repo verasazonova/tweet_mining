@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from six import string_types
 from os.path import isfile
+from operator import itemgetter
 import logging
 from sklearn.manifold import TSNE
 
@@ -119,6 +120,20 @@ def extract_xy_average(data, xind, yind, cind, cval):
     return np.array(xvals), np.array(yvals), np.array(yerr)
 
 
+def extract_data_series(data, xind, yind, cind, cval):
+    data_c = data[data[:, cind] == cval]
+
+    xvals = range(len(data_c))
+    yvals = []
+    yerr = []
+    for xval in xvals:
+        # using the row number
+        i = xval
+        yvals.append(data_c[i, yind].mean())
+        yerr.append(data_c[i, yind].std())
+    return np.array(xvals), np.array(yvals), np.array(yerr)
+
+
 def extract_conditions(data, conditions=None):
     if conditions is None:
         return data
@@ -130,13 +145,19 @@ def extract_conditions(data, conditions=None):
 
     return data_c
 
-def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, conditions=None, witherror=False):
+
+def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, conditions=None, witherror=False,
+                              series=False, labels=None):
 
     data = extract_conditions(data_raw, conditions)
 
     cvals = sorted(list(set(data[:, cind])))
     for cval in cvals:
-        xvals, yvals, yerrs = extract_xy_average(data, xind, yind, cind, cval)
+
+        if series:
+            xvals, yvals, yerrs = extract_data_series(data, xind, yind, cind, cval)
+        else:
+            xvals, yvals, yerrs = extract_xy_average(data, xind, yind, cind, cval)
 
         np.set_printoptions(precision=4)  #formatter={'float': '{: 0.3f}'.format})
         print cval, xvals, yvals, yerrs
@@ -149,10 +170,15 @@ def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, co
         # by default cdict is a dictionary of color-value pairs
         else:
             color = cdict[cval]
-        if witherror:
-            plt.errorbar(xvals, yvals, yerr=yerrs, fmt='-', marker=marker, color=color, label=cval)
+
+        if labels is not None and cval in labels:
+            label = labels[cval]
         else:
-            plt.plot(xvals, yvals, '-', marker=marker, color=color, label=cval)
+            label = cval
+        if witherror:
+            plt.errorbar(xvals, yvals, yerr=yerrs, fmt='-', marker=marker, color=color, label=label)
+        else:
+            plt.plot(xvals, yvals, '-', marker=marker, color=color, label=label)
 
 
 def extract_base(data, xind, yind, cind, cval):
@@ -213,17 +239,44 @@ def plot_curves_baseslines():
 
 def plot_kenyan_data(dataname):
 
-    TYPES = {'avg': 0, 'std': 1, 'cluster': 2, 'bow': 3, 'diff': 4}
+    TYPES = {'avg': 0, 'std': 1, 'cluster': 2, 'bow': 3, 'diff': 4, 'std_diff': 5, 'cluster_full': 6, 'all':7,
+             'std_diff_2':8, 'std_diff_3':9, 'std_diff_4':10, 'std_diff_5':11 }
     converter = {2: lambda s: TYPES[s.strip()]}
 
-    print TYPES
+    inv_types = dict([(v, k) for (k, v) in TYPES.items()])
+    print inv_types
 
-    if isfile(dataname + "_lr_fscore.txt"):
-        data_lr = np.loadtxt(dataname + "_lr_fscore.txt", delimiter=',', converters=converter)
-        plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
+    for suffix in ["lr", "svm"]:
 
-    if isfile(dataname + "_svm_fscore.txt"):
-        data_svm = np.loadtxt(dataname + "_svm_fscore.txt", delimiter=',', converters=converter)
-        plot_multiple_xy_averages(data_svm, 2, 8, 3, 's', cdict='b', witherror=False)
+        filename = dataname + "_" + suffix + "_fscore.txt"
+        if isfile(filename):
+            data_lr = np.loadtxt(filename, delimiter=',', converters=converter)
+            cvals = sorted(TYPES.values())
+            cmap = get_cmap(len(cvals))
+            cdict = {}
+            for i, cval in enumerate(cvals):
+                cdict[cval] = cmap(i)
+#            plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
+            plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True, labels=inv_types)
+            #plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+            #                          conditions=[(2, TYPES['cluster'])])
+#            plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+#                                      conditions=[(2, TYPES['cluster_full'])])
+            #plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+            #                          conditions=[(2, TYPES['std_diff'])])
+            #plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+            #                          conditions=[(2, TYPES['all'])])
+
+            plt.grid()
+
+            data_base = np.loadtxt("../mpeketoni_svm_fscore bow_only_reference.txt", delimiter=',', converters=converter)
+            data_bow = np.concatenate([data_base for i in range(10)], axis=0)
+
+            #plot_multiple_xy_averages(data_bow, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+            #                          conditions=[(2, TYPES['bow'])])
+
+            plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=3,
+                       fancybox=True, shadow=True)
+
 
     plt.savefig(dataname+"w2v.pdf")

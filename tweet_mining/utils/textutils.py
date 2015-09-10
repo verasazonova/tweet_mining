@@ -26,7 +26,7 @@ def normalize_punctuation(phrase, url=True, username=True, hashtag=True, punctua
     # separate punctuation by space
     if punctuation:
         for punctuation_char in [',', ':', '.', '(', ')', '!', '?', ':', ';', '/', '\"', '*', '^', '\'',
-                                 '_', '[', ']', '+', '-']:
+                                 '_', '[', ']', '+', '-', '\"', '`', '~', '=']:
             norm_phrase = norm_phrase.replace(punctuation_char, ' ' + punctuation_char+' ')
 
     #delete #

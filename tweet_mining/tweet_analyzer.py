@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 import os
 import numpy as np
 import re
+import pickle
 from tweet_mining.utils import ioutils, plotutils
 from tweet_mining.utils import textutils as tu
 import w2v_models
@@ -97,6 +98,7 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
 def explore_classifier(x, y, clf=None, n_trials=1):
     for n in range(n_trials):
         x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=n)
+        print x_train[0]
         clf.fit(x_train, y_train)
         y_pred = clf.predict(x_test)
         print(sklearn.metrics.confusion_matrix(y_test, y_pred))
@@ -186,7 +188,7 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
                     else:
                         x_unused, x_unlabeled_for_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
 
-                    scores_array = w2v_classify_tweets(x_data=x_labeled,
+                    names, scores_array = w2v_classify_tweets(x_data=x_labeled,
                                                        y_data=y_labeled,
                                                        unlabeled_data=x_unlabeled_for_w2v,
                                                        window=window,
@@ -201,7 +203,7 @@ def tweet_classification(filename, size, window, dataname, per=None, thr=None, n
                                                        rebuild=rebuild)
 
                     with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
-                        for scores, name in zip(scores_array, ["avg", "std", "diff", "cluster"]):
+                        for scores, name in zip(scores_array, names):
                             for i, score in enumerate(scores):
                                 f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %i \n" %
                                        (n, i, name, size, p, thresh, len(x_labeled),
@@ -241,68 +243,87 @@ def build_w2v_model(w2v_corpus, dataname="", window=0, size=0, min_count=0, rebu
     return w2v_model
 
 
+def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=0, dataname="", stoplist=None, recluster_thresh=0,
+                      rebuild=False, alpha=5, no_below=6, no_above=0.9):
+
+    model_name = w2v_models.make_dpgmm_model_name(dataname=dataname,n_components=n_components, n_below=no_below,
+                                                  n_above=no_above, alpha=alpha)
+    logging.info("Looking for model %s" % model_name)
+    if not rebuild and os.path.isfile(model_name):
+        dpgmm = pickle.load(open(model_name, 'rb'))
+    else:
+        dpgmm = transformers.DPGMMClusterModel(w2v_model=w2v_model, n_components=n_components, dataname=dataname,
+                                               stoplist=stoplist, recluster_thresh=recluster_thresh, alpha=alpha,
+                                               no_below=no_below, no_above=no_above)
+        dpgmm.fit(w2v_corpus)
+        pickle.dump(dpgmm, open(model_name, 'wb'))
+    return dpgmm
+
+
 def w2v_classify_tweets(x_data=None, y_data=None, unlabeled_data=None, window=0, size=0, dataname="", n_components=0,
-                        clf=None, rebuild=False, explore=False, stoplist=None, min_count=1, recluster_thresh=0):
+                        clf=None, rebuild=False, explore=False, stoplist=None, min_count=1, recluster_thresh=0,
+                        no_above=0.9, no_below=6):
 
     w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in np.concatenate([x_data, unlabeled_data])])
 
     logging.info("Classifying %s, %i, %i, %i, %i" % (dataname, len(w2v_corpus), min_count, recluster_thresh, n_components))
 
+    # build models
     w2v_model = build_w2v_model(w2v_corpus, dataname=dataname, window=window, size=size, min_count=min_count,
                                 rebuild=rebuild, explore=explore)
 
-    dpgmm = transformers.DPGMMClusterModel(w2v_model, n_components=n_components, dataname=dataname, stoplist=stoplist,
-                                           recluster_thresh=recluster_thresh)
-    dpgmm.fit(w2v_corpus)
+    # get features from models
+    w2v = transformers.W2VTextModel(w2v_model=w2v_model, no_above=1.0, no_below=1)
 
-    x_data = transformers.W2VTextModel(w2v_model=w2v_model,
-                                       dpgmm=dpgmm,
-                                       no_above=1.0, no_below=1,
-                                       stoplist=[]).fit_transform(x_data)
+    #dpgmm = build_dpgmm_model(w2v_corpus, w2v_model=w2v_model, n_components=n_components, dataname=dataname,
+    #                          stoplist=stoplist, recluster_thresh=recluster_thresh, alpha=5, no_above=no_above,
+    #                          no_below=no_below)
+
+    # get matrices of features from x_data
+    w2v_data = w2v.fit_transform(x_data)
+    #dpgmm_data = dpgmm.transform(x_data)
+
+    print w2v_data.shape
+    #print dpgmm_data.shape
+
+    # scale features
+    for name, inds in w2v.feature_crd.items():
+        w2v_data[:, inds] = StandardScaler().fit_transform(w2v_data[:, inds])
+
+    #for name, inds in dpgmm.feature_crd.items():
+    #    dpgmm_data[:, inds] = StandardScaler().fit_transform(dpgmm_data[:, inds])
 
     # scale averages
-    x_data_avg = StandardScaler().fit_transform(x_data[:, 0:size])
+    x_data_avg = w2v_data[:, w2v.feature_crd['avg']]
+    x_data_std = np.concatenate([x_data_avg, w2v_data[:, w2v.feature_crd['std']]], axis=1)
+    x_data_std_diff = np.concatenate([x_data_std, w2v_data[:, w2v.feature_crd['diff']]], axis=1)
+    x_data_std_diff2 = np.concatenate([x_data_std_diff, w2v_data[:, w2v.feature_crd['diff2']]], axis=1)
+    x_data_std_diff3 = np.concatenate([x_data_std_diff2, w2v_data[:, w2v.feature_crd['diff3']]], axis=1)
+    x_data_std_diff4 = np.concatenate([x_data_std_diff3, w2v_data[:, w2v.feature_crd['diff4']]], axis=1)
+    x_data_std_diff5 = np.concatenate([x_data_std_diff4, w2v_data[:, w2v.feature_crd['diff5']]], axis=1)
 
-    std = StandardScaler().fit_transform(x_data[:, size:2*size])
 
-    diffs = StandardScaler().fit_transform(x_data[:, 2*size:3*size-1])
+    #x_data_cluster = np.concatenate([x_data_std_diff2, dpgmm_data[:, dpgmm.feature_crd['global']]], axis=1)
 
-    # scale standard deviations separately
-    x_data_std = np.concatenate([x_data_avg, std], axis=1)
-    x_data_diff = np.concatenate([x_data_avg, diffs], axis=1)
-
-    #cluster = StandardScaler().fit_transform(x_data[:, 3*size-1:])
-    cluster = x_data[:, 3*size-1:3*size-1+30]
-
-    cluster_full = x_data[:, 3*size-1:]
-
-    x_data_cluster = np.concatenate([x_data_avg, std, cluster], axis=1)
-
-    x_data_cluster_full = np.concatenate([x_data_avg, std, cluster_full], axis=1)
-
-    # scale clusters
-    #x_data_cluster = np.concatenate([x_data_std, x_data[:, 2*size:2*size+30]], axis=1)
+    names = ['avg', 'std', 'std_diff', 'std_diff_2', 'std_diff_3','std_diff_4','std_diff_5']
+    experiments = [x_data_avg, x_data_std, x_data_std_diff, x_data_std_diff2, x_data_std_diff3, x_data_std_diff4,
+                   x_data_std_diff5]
 
     if explore:
 
-        explore_classifier(x_data_avg, y_data, clf=clf, n_trials=1)
-        explore_classifier(x_data_std, y_data, clf=clf, n_trials=1)
-        explore_classifier(x_data_diff, y_data, clf=clf, n_trials=1)
-        explore_classifier(x_data_cluster, y_data, clf=clf, n_trials=1)
+        for experiment in experiments:
+            explore_classifier(experiment, y_data, clf=clf, n_trials=1)
 
-        return []
+        return [], []
     else:
 
-        scores_avg = run_cv_classifier(x_data_avg, y_data, clf=clf, n_trials=1, n_cv=5)
-        scores_std = run_cv_classifier(x_data_std, y_data, clf=clf, n_trials=1, n_cv=5)
-        scores_diff = run_cv_classifier(x_data_diff, y_data, clf=clf, n_trials=1, n_cv=5)
-        scores_cluster = run_cv_classifier(x_data_cluster, y_data, clf=clf, n_trials=1, n_cv=5)
+        results = []
+        for name, experiment in zip(names, experiments):
+            scores = run_cv_classifier(experiment, y_data, clf=clf, n_trials=1, n_cv=5)
+            print name, scores, scores.mean()
+            results.append(scores)
 
-        #scores_cluster = run_cv_classifier(x_data_cluster, y_data, clf=clf, n_trials=1, n_cv=5)
-
-        print "Scaled: ", scores_avg.mean(), scores_std.mean(), scores_diff.mean(), scores_cluster.mean()
-
-        return [scores_avg, scores_std, scores_diff, scores_cluster]
+        return names, results
 
 
 def w2v_cluster_tweet_vocab(filename, window=0, size=0, dataname="", n_components=0, min_count=1,
@@ -315,8 +336,12 @@ def w2v_cluster_tweet_vocab(filename, window=0, size=0, dataname="", n_component
     w2v_model = build_w2v_model(w2v_corpus, dataname=dataname, window=window, size=size, min_count=min_count,
                                 rebuild=rebuild, explore=False)
 
-    dpgmm = transformers.DPGMMClusterModel(w2v_model, n_components=n_components, dataname=dataname, stoplist=stoplist)
+    dpgmm = transformers.DPGMMClusterModel(w2v_model, n_components=n_components, dataname=dataname,
+                                           stoplist=stoplist, recluster_thresh=0, no_above=0.9, no_below=6,
+                                           alpha=5)
     dpgmm.fit(w2v_corpus)
+
+    print dpgmm.dpgmm.precs_.shape
 
 
 def check_w2v_model(filename="", w2v_model=None, window=0, size=0, min_count=1, dataname="", rebuild=True):
@@ -368,7 +393,7 @@ def __main__():
     parser.add_argument('--window', action='store', dest='window', default='10', help='Number of LDA topics')
     parser.add_argument('--min', action='store', dest='min', default='1', help='Number of LDA topics')
     parser.add_argument('--nclusters', action='store', dest='nclusters', default='30', help='Number of LDA topics')
-    parser.add_argument('--clusthresh', action='store', dest='clusthresh', default='1000', help='Threshold for reclustering')
+    parser.add_argument('--clusthresh', action='store', dest='clusthresh', default='0', help='Threshold for reclustering')
     parser.add_argument('--p', action='store', dest='p', default='-1', help='Fraction of labeled data')
     parser.add_argument('--thresh', action='store', dest='thresh', default='-1', help='Fraction of unlabelled data')
     parser.add_argument('--ntrial', action='store', dest='ntrial', default='-1', help='Number of the trial')

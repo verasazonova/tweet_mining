@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 from gensim import corpora, models, matutils
 import re
 import w2v_models
+from six import string_types
 
 
 # A BOW Model encompassing sklearn transformer interface
@@ -45,20 +46,22 @@ class BOWModel(BaseEstimator, TransformerMixin):
 # A class encompassing a W2V representation for texts through a sklearn transforme interface
 class W2VTextModel(BaseEstimator, TransformerMixin):
 
-    def __init__(self, w2v_model=None, dpgmm=None, scaler=None, no_below=2, no_above=0.9, stoplist=None):
+    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None):
         self.w2v_model = w2v_model
-        self.dpgmm = dpgmm
         self.dictionary = None
         self.no_above = no_above
         self.no_below = no_below
         self.stoplist = stoplist
+        self.diffmax = 6
+        self.feature_crd = {}
 
         self.no_dictionary = False
-        logging.info("W2v based text classifier with model %s and dpgmm %s " % (self.w2v_model, self.dpgmm))
+        logging.info("W2v based text classifier with model %s " % (self.w2v_model))
 
     # the w2v model should be provided if not it will be built from the input data
     # builds dictionary to filter out frequent and rare words
     # loads a scaler for clustering (the clusters and scaler should be built)
+    # X here is a list of texts (tweets).  Every
     def fit(self, X, y=None):
 
         logging.info("Loaded from file")
@@ -68,25 +71,57 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
         if self.w2v_model is None:
             self.w2v_model = w2v_models.build_word2vec(x_clean, size=100, window=10, min_count=1, dataname="test")
 
-        if self.dpgmm is None:
-            logging.info("No dpgmm provided - building")
-            #self.dpgmm, self.scaler = w2v_models.build_dpgmm_model(x_clean, w2v_model=self.w2v_model,
-            #                                                       n_components=30,
-            #                                                       stoplist=self.stoplist)
-            self.dpgmm = DPGMMClusterModel(self.w2v_model, n_components=30, dataname="test", stoplist=self.stoplist)
-
         if self.no_below == 1 and self.no_above == 1:
             self.no_dictionary = True
         else:
             self.dictionary = corpora.Dictionary(x_clean)
             self.dictionary.filter_extremes(no_above=self.no_above, no_below=self.no_below)
 
+        # setting the coordinates for different models
+        size = self.w2v_model.layer1_size
+        self.feature_crd = {'avg': range(0, size),
+                            'std': range(size, 2*size),
+                            'diff': range(2*size, 3*size-1)}
+        start = 3*size-1
+        l = size -2
+        for i in range(2,self.diffmax):
+            name = "diff%i" % i
+            val = range(start, start + l)
+            self.feature_crd[name] = val
+            start += l
+            l -= 1
         logging.info("W2V: got a model %s " % (self.w2v_model,))
-        logging.info("W2V: got a cluster %s " % (self.dpgmm,))
         return self
 
+
+    def vectorize_text(self, text):
+        size = self.w2v_model.layer1_size
+
+        # allow one word vectorization without encapsulation by an array
+        if isinstance(text, string_types):
+            text = [text]
+
+        # get a matrix of w2v vectors
+        vec_list = [self.w2v_model[word].reshape((1, size)) for word in text if word in self.w2v_model]
+
+        if not vec_list:
+            data = np.zeros(size).reshape((1, size))
+        else:
+            data = np.concatenate(vec_list)
+
+        # [avg, std, diff, diff_2]
+        features = [np.median(data, axis=0), np.std(data, axis=0), np.median(np.diff(data, axis=1), axis=0)]
+        for i in range(2,self.diffmax):
+            data_diff = data - np.roll(data, i, axis=1)
+            features.append(np.median(data_diff[:, i:], axis=0))
+
+        vec = np.concatenate(features)
+
+        return vec.reshape((1, len(vec)))
+
+
     # X is an array of sentences (texts)
-    # Pre-process, filter frequent and rare words, and vectorize
+    # Pre-process, filter frequent and rare words, and return an array of dictionary of different feature vectors
     def transform(self, X):
 
         # Text pre-processing
@@ -101,25 +136,32 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
             x_processed = [[word for word in text if word in self.dictionary.token2id and word not in self.stoplist]
                             for text in x_clean]
 
-        # Vectorize using W2V model, and clusterer
-        logging.info("Clusterer %s " % self.dpgmm)
+        # Vectorize using W2V model
         if self.w2v_model is not None:
-            x_vector = w2v_models.vectorize_tweet_corpus(self.w2v_model, x_processed, dpgmm=self.dpgmm)
-            logging.info("W2V Averaged: returning pre-processed data of shape %s" % (x_vector.shape, ))
+            logging.info("W2V: ectorizing a corpus")
+            size = self.w2v_model.layer1_size
+            if len(X) > 0:
+                vecs = np.concatenate([self.vectorize_text(z) for z in x_processed])
+            else:
+                vecs = np.zeros(size).reshape((1, size))
+            logging.info("W2V Text Model: returning pre-processed data of shape %s" % (vecs.shape, ))
         else:
             logging.info("W2V Averaged: no model was provided.")
-            x_vector = np.zeros((len(X), 1))
-        return x_vector
+            vecs = np.zeros((len(X), 1))
+
+        return vecs
 
 
 class DPGMMClusterModel(BaseEstimator, TransformerMixin):
 
-    def __init__(self, w2v_model, n_components=None, no_above=0.9, no_below=8, dataname="", stoplist=None,
-                 dictionary=None, recluster_thresh=1000):
+    def __init__(self, w2v_model=None, n_components=None, no_above=0.9, no_below=8, dataname="", stoplist=None,
+                 dictionary=None, recluster_thresh=1000, alpha=5):
         self.w2v_model = w2v_model
         self.no_above = no_above
         self.no_below = no_below
+        self.alpha = alpha
         self.n_components = n_components
+        self.n_sub_components = int(n_components / 2)
         self.stoplist = stoplist
         self.dataname = dataname
         self.dictionary = dictionary
@@ -127,6 +169,7 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
         self.scaler = None
         self.cluster_info = None
         # a list of sub-clusterer
+        self.feature_crd = {}
         self.subdpgmms = []
         self.reclustered = []
         self.recluster_thresh = recluster_thresh
@@ -135,7 +178,8 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
         return (word in self.w2v_model) and (word in self.dictionary.token2id) and (len(word) > 1) and \
                (self.stoplist is None or word not in self.stoplist)
 
-
+    # constructs a dictionary and a DPGMM model on 9000 middle frequency words from X
+    # X is a sequence of texts
     def fit(self, X, y=None):
         # either consturct a dictionary from X, trim it
         if self.dictionary is None:
@@ -143,7 +187,8 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
             word_list = np.array([word for word in self.dictionary.token2id.iterkeys() if self.should_cluster_word(word)])
         # or use an existing dictionary and trim the given set of words
         else:
-            word_list = np.array([word for word in X if self.should_cluster_word(word)])
+            # note the double loop here!!
+            word_list = np.array([word for text in X for word in text if self.should_cluster_word(word)])
 
         self.dictionary.filter_extremes(no_below=self.no_below, no_above=self.no_above, keep_n=9000)
 
@@ -162,7 +207,8 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
         self.scaler = StandardScaler()
         vecs = self.scaler.fit_transform(np.array(vec_list))
 
-        self.dpgmm = DPGMM(n_components=self.n_components, covariance_type='diag', alpha=10, n_iter=100, tol=0.0001)
+        self.dpgmm = DPGMM(n_components=self.n_components, covariance_type='diag', alpha=self.alpha,
+                           n_iter=1000, tol=0.0001)
         self.dpgmm.fit(vecs)
         logging.info("DPGMM converged: %s" % self.dpgmm.converged_)
 
@@ -174,16 +220,19 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
             cluster_size = len(cluster_words)
             if cluster_size > self.recluster_thresh and self.recluster_thresh > 0:
                 logging.info("DPGMM: reclustering %i words for cluster %i" % (len(cluster_words), i))
-                sub_dpgmm = DPGMMClusterModel(self.w2v_model, n_components=self.n_components,
+                sub_dpgmm = DPGMMClusterModel(w2v_model=self.w2v_model,
+                                              n_components=self.n_sub_components,
                                               dictionary=self.dictionary,
                                               dataname="%s-%i" % (self.dataname, i), stoplist=self.stoplist)
-                sub_dpgmm.fit(cluster_words)
+                # recluster words.  Note the double array
+                sub_dpgmm.fit([cluster_words])
                 self.subdpgmms.append(sub_dpgmm)
                 self.reclustered.append(i)
             if cluster_size > 0:
-                cluster_center_original = self.scaler.inverse_transform(cluster_center)
-                similar_words = self.w2v_model.most_similar_cosmul(positive=[cluster_center_original], topn=cluster_size)
-                central_words = [word for word, _ in similar_words if word in cluster_words]
+                #cluster_center_original = self.scaler.inverse_transform(cluster_center)
+                #similar_words = self.w2v_model.most_similar_cosmul(positive=[cluster_center_original], topn=cluster_size)
+                #central_words = [word for word, _ in similar_words if word in cluster_words]
+                central_words = cluster_words[0:10]
             else:
                 central_words = []
             self.cluster_info.append({'cnt': i, 'size': cluster_size, 'words': central_words})
@@ -191,29 +240,63 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
         filename = "clusters_%s_%i_%.1f_%.0f.txt" % (self.dataname, self.n_components, self.no_above, self.no_below)
         io.save_cluster_info(filename, self.cluster_info)
 
+        # setting up the coordinates for the features
+        self.feature_crd = {'global': range(0, self.n_components),
+                            'reclustered': [i for i in range(0, self.n_components + self.n_sub_components*len(self.reclustered))
+                                            if i not in self.reclustered]}
+
         return self
 
-    def transform(self, X):
+    # calculate cluster counts for one text
+    def clusterize(self, text):
+        word_list = [word for word in text if self.should_cluster_word(word)]
+        vec_list = np.array([self.w2v_model[word] for word in word_list])
+        bincounts = np.zeros((self.n_components+self.n_sub_components*len(self.reclustered),))
 
-        word_list = np.array([word for word in X if self.should_cluster_word(word)])
-        vec_list = [self.w2v_model[word] for word in word_list]
-
-        if vec_list:
+        if len(vec_list) > 0:
             # assign words to clusters
             predictions = self.dpgmm.predict(self.scaler.transform(np.array(vec_list)))
-            global_bincount = np.bincount(predictions, minlength=self.dpgmm.n_components)
+            global_bincount = np.bincount(predictions, minlength=self.n_components)
             # re-assign words in large clusters
-            bincounts = [global_bincount]
+            bincounts[0:self.n_components] = global_bincount #reshape((1,len(global_bincount)))
+            start = self.n_components
             for i, subdpgmm in zip(self.reclustered, self.subdpgmms):
-                words_torecluster = word_list[predictions == i]
-                bincounts.append(subdpgmm.transform(words_torecluster))
+                # if words in respective clusters exists - recluster them
+                vecs_torecluster = vec_list[predictions == i]
+                if len(vecs_torecluster) > 0:
+                    predictions = subdpgmm.dpgmm.predict(subdpgmm.scaler.transform(np.array(vecs_torecluster)))
+                    bincounts[start:start+subdpgmm.dpgmm.n_components] = \
+                        np.bincount(predictions, minlength=subdpgmm.dpgmm.n_components) #.reshape((1, subdpgmm.n_components))
+                start += subdpgmm.dpgmm.n_components
+                # erase the count inthe global counts
 
-            vec = np.concatenate(bincounts)
+        # returns a vector of cluster bin counts: [ global, reclustered1, reclustered2, ...]
+        return bincounts.reshape((1, len(bincounts)))
 
+
+    # for a  text, constructs a bincount of clusters present in the sentence
+    # X is a list of texts.  One text is one string! Not tokenized
+    def transform(self, X):
+
+        # Text pre-processing
+        x_clean = [tu.normalize_punctuation(text).split() for text in X]
+        logging.info("DPGGM: Text prepocessed")
+
+        # Vectorize using W2V model
+        if self.dpgmm is not None:
+            logging.info("Vectorizing a corpus")
+            size = self.w2v_model.layer1_size
+            if len(X) > 0:
+                vecs = np.concatenate([self.clusterize(z) for z in x_clean], axis=0)
+            else:
+                vecs = np.zeros(size).reshape((1, size))
+            logging.info("DPGMM: returning pre-processed data of shape %s" % (vecs.shape, ))
         else:
-            vec = np.zeros((self.dpgmm.n_components*(len(self.reclustered)+1),))
+            logging.info("W2V Averaged: no model was provided.")
+            vecs = np.zeros((len(X), 1))
 
-        return vec
+        return vecs
+
 
 # A class that augments a given text using similar words from a W2V
 # model.  Follows sklearn transform interface

@@ -5,7 +5,7 @@
 echo $1
 MAIN_PY="/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/tweet_analyzer.py"
 
-if [$1 == "train.csv"]; then
+if [ "$1" == "train.csv" ]; then
     # For sentiment dataset
     DATA_DIR="/Users/verasazonova/Work/TweetSentiment"
     DATA="/Users/verasazonova/Work/TweetSentiment/trainingandtestdata/train.csv"
@@ -58,7 +58,7 @@ else
     OUTPUT=$DNAME".txt"
 
     touch $OUTPUT
-    python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 5  --window 10 --nclusters 30 --clusthresh 800 --clfname w2v  --clfbase lr  --action classify --rebuild
+    python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 1  --window 10 --nclusters 30 --clusthresh 0 --clfname w2v  --clfbase lr  --action classify --rebuild >> $OUTPUT
     #python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 5  --window 10 --nclusters 30 --clfname bow  --clfbase lr  --action classify >> $OUTPUT
     python $MAIN_PY --dname $DNAME --action plot >> $OUTPUT
 

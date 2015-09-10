@@ -10,7 +10,6 @@ from operator import itemgetter
 from gensim.matutils import corpus2dense
 import os.path
 import pickle
-import w2v_models
 
 
 def crp_clusters(vecs):
@@ -126,33 +125,6 @@ def DPGGM_clustering(x_data, x_words, min_size=5, w2v_model=None, min_size_engli
     try_covar("spherical", x_words)
     try_covar("tied", x_words)
     try_covar("full", x_words)
-
-
-def assign_language(tweets, w2v_model, ids):
-
-    dpggm_model_name = "dpggm_30_5"
-    clf = load_dpggm(dpggm_model_name)
-
-    #print_first_words(clf, w2v_model)
-
-    id2lang = {}
-    with open("word_clusters_identified.txt", 'r') as f:
-        for line in f:
-            id2lang[int(line.split(':')[0])] = line.split(':')[1].strip()
-
-    def most_common(lst):
-        return sorted(set(lst), key=lst.count, reverse=True)
-
-    for i, (tweet, tweet_id) in enumerate(zip(tweets, ids)):
-        tweet_vector = w2v_models.vectorize_tweet_corpus(w2v_model, tweet)
-        clusters = clf.predict(tweet_vector)
-        languages = most_common([id2lang[cluster] for cluster in clusters])
-        if len(languages) > 1:
-            languages = languages[1:]
-        print "%s, %s" % (tweet_id, " ".join(languages))
-
-        if i % 100 == 0:
-            logging.info("Processed %i tweets" % i)
 
 
 # **************** Cluster relating functions ******************************

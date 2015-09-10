@@ -6,8 +6,6 @@ from six import string_types
 from tweet_mining.utils import textutils as tu
 from gensim.models.doc2vec import LabeledSentence
 from gensim.models import Word2Vec, Doc2Vec
-import re
-import collections
 import os.path
 
 import logging
@@ -18,6 +16,8 @@ import logging
 def make_w2v_model_name(dataname, size, window, min_count, corpus_length):
     return "w2v_model_%s_%i_%i_%i_%.2g" % (dataname, size, window, min_count, corpus_length)
 
+def make_dpgmm_model_name(dataname, n_components, n_above=0, n_below=0, alpha=5):
+    return "dpgmm_model_%s_%i_%i_%.1f_%.0f" % (dataname, n_components, alpha, n_above, n_below)
 
 def load_w2v(w2v_model_name):
     if os.path.isfile(w2v_model_name):
@@ -124,40 +124,3 @@ def build_doc2vec(dataset, size=100, window=10, dataname="none"):
     return d2v_model_dm, d2v_model_dbow
 
 #------------------------------
-
-
-def vectorize_tweet(w2v_model, tweet, dpgmm=None):
-    size = w2v_model.layer1_size
-
-    # allow one word vectorization without encapsulation by an array
-    if isinstance(tweet, string_types):
-        tweet = [tweet]
-
-    # get a matrix of w2v vectors
-    vec_list = [w2v_model[word].reshape((1, size)) for word in tweet if word in w2v_model]
-
-    if not vec_list:
-        data = np.zeros(size).reshape((1, size))
-    else:
-        data = np.concatenate(vec_list)
-
-    # [avg, std, diff]
-    features = [np.median(data, axis=0), np.std(data, axis=0), np.median(np.diff(data, axis=1), axis=0)]
-
-    # [cluster info]
-    features.append(dpgmm.transform(tweet))
-    vec = np.concatenate(features)
-
-    vec = vec.reshape((1, len(vec)))
-
-    return vec
-
-
-def vectorize_tweet_corpus(w2v_model, tweet_corpus, dpgmm=None):
-    logging.info("Vectorizing a corpus")
-    size = w2v_model.layer1_size
-    if len(tweet_corpus) > 0:
-        vecs = np.concatenate([vectorize_tweet(w2v_model, z, dpgmm=dpgmm) for z in tweet_corpus])
-    else:
-        vecs = np.zeros(size).reshape((1, size))
-    return vecs
