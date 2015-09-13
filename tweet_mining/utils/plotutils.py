@@ -154,13 +154,17 @@ def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, co
     cvals = sorted(list(set(data[:, cind])))
     for cval in cvals:
 
+        np.set_printoptions(precision=4)  #formatter={'float': '{: 0.3f}'.format})
         if series:
             xvals, yvals, yerrs = extract_data_series(data, xind, yind, cind, cval)
+            if cval in labels:
+                print labels[cval],
+            else:
+                print cval,
+            print len(xvals), yvals.mean()
         else:
             xvals, yvals, yerrs = extract_xy_average(data, xind, yind, cind, cval)
-
-        np.set_printoptions(precision=4)  #formatter={'float': '{: 0.3f}'.format})
-        print cval, xvals, yvals, yerrs
+            print cval, xvals, yvals, yerrs
         # if no color is supplied use black
         if cdict is None:
             color = 'k'
@@ -239,8 +243,8 @@ def plot_curves_baseslines():
 
 def plot_kenyan_data(dataname):
 
-    TYPES = {'avg': 0, 'std': 1, 'cluster': 2, 'bow': 3, 'diff': 4, 'std_diff': 5, 'cluster_full': 6, 'all':7,
-             'std_diff_2':8, 'std_diff_3':9, 'std_diff_4':10, 'std_diff_5':11 }
+    TYPES = {'0_avg': 0, '1_std': 1, '2_diff0_1':2, '3_diff0_2':3, '4_diff0_3':4,
+             '5_diff1_1':5, '6_diff1_2':6, '7_diff1_3':7, 'cluster':8}
     converter = {2: lambda s: TYPES[s.strip()]}
 
     inv_types = dict([(v, k) for (k, v) in TYPES.items()])
@@ -258,19 +262,11 @@ def plot_kenyan_data(dataname):
                 cdict[cval] = cmap(i)
 #            plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
             plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True, labels=inv_types)
-            #plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
-            #                          conditions=[(2, TYPES['cluster'])])
-#            plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
-#                                      conditions=[(2, TYPES['cluster_full'])])
-            #plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
-            #                          conditions=[(2, TYPES['std_diff'])])
-            #plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
-            #                          conditions=[(2, TYPES['all'])])
 
             plt.grid()
 
-            data_base = np.loadtxt("../mpeketoni_svm_fscore bow_only_reference.txt", delimiter=',', converters=converter)
-            data_bow = np.concatenate([data_base for i in range(10)], axis=0)
+            #data_base = np.loadtxt("../mpeketoni_svm_fscore bow_only_reference.txt", delimiter=',', converters=converter)
+            #data_bow = np.concatenate([data_base for i in range(10)], axis=0)
 
             #plot_multiple_xy_averages(data_bow, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
             #                          conditions=[(2, TYPES['bow'])])

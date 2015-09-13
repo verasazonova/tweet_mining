@@ -262,7 +262,7 @@ def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=0, dataname="", s
 
 def w2v_classify_tweets(x_data=None, y_data=None, unlabeled_data=None, window=0, size=0, dataname="", n_components=0,
                         clf=None, rebuild=False, explore=False, stoplist=None, min_count=1, recluster_thresh=0,
-                        no_above=0.9, no_below=6):
+                        no_above=0.9, no_below=5):
 
     w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in np.concatenate([x_data, unlabeled_data])])
 
@@ -273,7 +273,7 @@ def w2v_classify_tweets(x_data=None, y_data=None, unlabeled_data=None, window=0,
                                 rebuild=rebuild, explore=explore)
 
     # get features from models
-    w2v = transformers.W2VTextModel(w2v_model=w2v_model, no_above=1.0, no_below=1)
+    w2v = transformers.W2VTextModel(w2v_model=w2v_model, no_above=1.0, no_below=1, diffmax0=4, diffmax1=4)
 
     #dpgmm = build_dpgmm_model(w2v_corpus, w2v_model=w2v_model, n_components=n_components, dataname=dataname,
     #                          stoplist=stoplist, recluster_thresh=recluster_thresh, alpha=5, no_above=no_above,
@@ -286,28 +286,40 @@ def w2v_classify_tweets(x_data=None, y_data=None, unlabeled_data=None, window=0,
     print w2v_data.shape
     #print dpgmm_data.shape
 
+
+    dpgmm = transformers.DPGMMClusterModel(w2v_model=None, n_components=n_components, dataname=dataname,
+                                           stoplist=stoplist, recluster_thresh=0, no_above=no_above, no_below=no_below,
+                                           alpha=5)
+    dpgmm.fit(w2v_corpus)
+    dpgmm_data = dpgmm.transform(x_data)
+
     # scale features
     for name, inds in w2v.feature_crd.items():
         w2v_data[:, inds] = StandardScaler().fit_transform(w2v_data[:, inds])
 
-    #for name, inds in dpgmm.feature_crd.items():
-    #    dpgmm_data[:, inds] = StandardScaler().fit_transform(dpgmm_data[:, inds])
+    for name, inds in dpgmm.feature_crd.items():
+        dpgmm_data[:, inds] = StandardScaler().fit_transform(dpgmm_data[:, inds])
 
-    # scale averages
-    x_data_avg = w2v_data[:, w2v.feature_crd['avg']]
-    x_data_std = np.concatenate([x_data_avg, w2v_data[:, w2v.feature_crd['std']]], axis=1)
-    x_data_std_diff = np.concatenate([x_data_std, w2v_data[:, w2v.feature_crd['diff']]], axis=1)
-    x_data_std_diff2 = np.concatenate([x_data_std_diff, w2v_data[:, w2v.feature_crd['diff2']]], axis=1)
-    x_data_std_diff3 = np.concatenate([x_data_std_diff2, w2v_data[:, w2v.feature_crd['diff3']]], axis=1)
-    x_data_std_diff4 = np.concatenate([x_data_std_diff3, w2v_data[:, w2v.feature_crd['diff4']]], axis=1)
-    x_data_std_diff5 = np.concatenate([x_data_std_diff4, w2v_data[:, w2v.feature_crd['diff5']]], axis=1)
+    names = []
+    experiments = []
 
+
+#['0_avg', '1_std', '4_diff0_3', '7_diff1_3']:   #
+    for name in sorted(w2v.feature_crd.keys()):
+        print name
+        names.append(name)
+        if len(experiments) > 0:
+            experiments.append(np.concatenate([experiments[-1], w2v_data[:, w2v.feature_crd[name]]], axis=1))
+        else:
+            experiments.append(w2v_data[:, w2v.feature_crd[name]])
+
+    names.append("cluster")
+    experiments.append(np.concatenate([experiments[-1], dpgmm_data[:, dpgmm.feature_crd['global']]], axis=1))
 
     #x_data_cluster = np.concatenate([x_data_std_diff2, dpgmm_data[:, dpgmm.feature_crd['global']]], axis=1)
 
-    names = ['avg', 'std', 'std_diff', 'std_diff_2', 'std_diff_3','std_diff_4','std_diff_5']
-    experiments = [x_data_avg, x_data_std, x_data_std_diff, x_data_std_diff2, x_data_std_diff3, x_data_std_diff4,
-                   x_data_std_diff5]
+    #names = ['avg', 'std', 'diff0_1', 'diff0_2', 'diff0_3', 'all']
+    #experiments = [x_data_avg, x_data_std, x_data_std_diff, x_data_std_diff2, x_data_std_diff3, x_data_std_all]
 
     if explore:
 
@@ -333,15 +345,15 @@ def w2v_cluster_tweet_vocab(filename, window=0, size=0, dataname="", n_component
     x_data, y_data, stoplist = make_x_y(filename, ["text"])
     w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in x_data])
 
-    w2v_model = build_w2v_model(w2v_corpus, dataname=dataname, window=window, size=size, min_count=min_count,
-                                rebuild=rebuild, explore=False)
+    #w2v_model = build_w2v_model(w2v_corpus, dataname=dataname, window=window, size=size, min_count=min_count,
+    #                            rebuild=rebuild, explore=False)
 
-    dpgmm = transformers.DPGMMClusterModel(w2v_model, n_components=n_components, dataname=dataname,
-                                           stoplist=stoplist, recluster_thresh=0, no_above=0.9, no_below=6,
+    dpgmm = transformers.DPGMMClusterModel(w2v_model=None, n_components=n_components, dataname=dataname,
+                                           stoplist=stoplist, recluster_thresh=0, no_above=0.9, no_below=5,
                                            alpha=5)
     dpgmm.fit(w2v_corpus)
 
-    print dpgmm.dpgmm.precs_.shape
+    #print dpgmm.dpgmm.precs_.shape
 
 
 def check_w2v_model(filename="", w2v_model=None, window=0, size=0, min_count=1, dataname="", rebuild=True):

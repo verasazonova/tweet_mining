@@ -5,10 +5,12 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 import utils.textutils as tu
 import utils.ioutils as io
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.mixture import DPGMM
 from sklearn.preprocessing import StandardScaler
 from gensim import corpora, models, matutils
 import re
+from sklearn.cluster import DBSCAN
 import w2v_models
 from six import string_types
 
@@ -46,13 +48,14 @@ class BOWModel(BaseEstimator, TransformerMixin):
 # A class encompassing a W2V representation for texts through a sklearn transforme interface
 class W2VTextModel(BaseEstimator, TransformerMixin):
 
-    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None):
+    def __init__(self, w2v_model=None, no_below=2, no_above=0.9, stoplist=None, diffmax0=6, diffmax1=6):
         self.w2v_model = w2v_model
         self.dictionary = None
         self.no_above = no_above
         self.no_below = no_below
         self.stoplist = stoplist
-        self.diffmax = 6
+        self.diffmax0 = diffmax0
+        self.diffmax1 = diffmax1
         self.feature_crd = {}
 
         self.no_dictionary = False
@@ -79,13 +82,18 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
 
         # setting the coordinates for different models
         size = self.w2v_model.layer1_size
-        self.feature_crd = {'avg': range(0, size),
-                            'std': range(size, 2*size),
-                            'diff': range(2*size, 3*size-1)}
-        start = 3*size-1
-        l = size -2
-        for i in range(2,self.diffmax):
-            name = "diff%i" % i
+        self.feature_crd = {'0_avg': range(0, size),
+                            '1_std': range(size, 2*size)}
+        start = 2*size
+        l = size
+        for i in range(1,self.diffmax0):
+            name = "%i_diff0_%i" % (1+i, i)
+            val = range(start, start + l)
+            self.feature_crd[name] = val
+            start += l
+        l = size - 1
+        for i in range(1,self.diffmax1):
+            name = "%i_diff1_%i" % (self.diffmax0 + i, i)
             val = range(start, start + l)
             self.feature_crd[name] = val
             start += l
@@ -109,11 +117,22 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
         else:
             data = np.concatenate(vec_list)
 
-        # [avg, std, diff, diff_2]
-        features = [np.median(data, axis=0), np.std(data, axis=0), np.median(np.diff(data, axis=1), axis=0)]
-        for i in range(2,self.diffmax):
+        # [avg, std]
+        features = [np.median(data, axis=0), np.std(data, axis=0)]
+
+        for i in range(1, self.diffmax0):
+            if len(data) > i:
+                data_diff = data - np.roll(data, i, axis=0)
+                features.append(np.median(np.diff(data_diff, axis=0), axis=0))
+            else:
+                features.append(np.zeros((size,)))
+
+        # these features are not differences between words, they are differences between columns !!!!!
+        # I don't know what it corresponds to
+        for i in range(1, self.diffmax1):
             data_diff = data - np.roll(data, i, axis=1)
             features.append(np.median(data_diff[:, i:], axis=0))
+
 
         vec = np.concatenate(features)
 
@@ -175,7 +194,8 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
         self.recluster_thresh = recluster_thresh
 
     def should_cluster_word(self, word):
-        return (word in self.w2v_model) and (word in self.dictionary.token2id) and (len(word) > 1) and \
+        return (word in self.dictionary.token2id) and (len(word) > 1) and \
+               (self.w2v_model is None or word in self.w2v_model) and \
                (self.stoplist is None or word not in self.stoplist)
 
     # constructs a dictionary and a DPGMM model on 9000 middle frequency words from X
@@ -184,13 +204,20 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
         # either consturct a dictionary from X, trim it
         if self.dictionary is None:
             self.dictionary = corpora.Dictionary(X)
-            word_list = np.array([word for word in self.dictionary.token2id.iterkeys() if self.should_cluster_word(word)])
         # or use an existing dictionary and trim the given set of words
-        else:
-            # note the double loop here!!
-            word_list = np.array([word for text in X for word in text if self.should_cluster_word(word)])
-
         self.dictionary.filter_extremes(no_below=self.no_below, no_above=self.no_above, keep_n=9000)
+
+        if self.w2v_model is None:
+            w2v_corpus = [[word for word in text if self.should_cluster_word(word)] for text in X]
+            self.w2v_model = w2v_models.build_word2vec(w2v_corpus, size=100, window=10, min_count=self.no_below,
+                                                       dataname=self.dataname+"_dpgmm")
+
+        word_list = np.array([word for word in self.dictionary.token2id.iterkeys() if self.should_cluster_word(word)])
+
+        # This was  reclustering clause - I need to re-write this
+        # else:
+        #    # note the double loop here!!
+        #    word_list = np.array([word for text in X for word in text if self.should_cluster_word(word)])
 
         # construct a list of words to cluster
         # remove rare and frequent words
@@ -212,9 +239,11 @@ class DPGMMClusterModel(BaseEstimator, TransformerMixin):
         self.dpgmm.fit(vecs)
         logging.info("DPGMM converged: %s" % self.dpgmm.converged_)
 
+
         # save information about found clusters
         self.cluster_info = []
         y_ = self.dpgmm.predict(vecs)
+
         for i, cluster_center in enumerate(self.dpgmm.means_):
             cluster_words = word_list[y_ == i]
             cluster_size = len(cluster_words)

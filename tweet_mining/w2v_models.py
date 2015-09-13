@@ -63,12 +63,14 @@ def test_word2vec(w2v_model, word_list=None, neg_list=None):
     if word_list is None or not word_list:
         return []
     else:
-        pos_list = [word for word in word_list if word in w2v_model]
-        if neg_list is None or not neg_list:
-            list_similar = w2v_model.most_similar_cosmul(positive=pos_list)
+        pos_list_checked = [word for word in word_list if word in w2v_model]
+        neg_list_checked = [word for word in neg_list if word in w2v_model]
+        if pos_list_checked and neg_list_checked:
+            list_similar = w2v_model.most_similar_cosmul(positive=pos_list_checked, negative=neg_list_checked, topn=10)
+        elif pos_list_checked:
+                list_similar = w2v_model.most_similar_cosmul(positive=pos_list_checked)
         else:
-            neg_list_checked = [word for word in neg_list if word in w2v_model]
-            list_similar = w2v_model.most_similar_cosmul(positive=pos_list, negative=neg_list_checked, topn=10)
+            list_similar = []
         return list_similar
 #------------------------------
 

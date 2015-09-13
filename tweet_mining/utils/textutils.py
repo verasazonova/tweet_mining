@@ -8,7 +8,7 @@ import logging
 
 # add space around punctuation
 # assumes unicode strings
-def normalize_punctuation(phrase, url=True, username=True, hashtag=True, punctuation=True, RT=False):
+def normalize_punctuation(phrase, url=True, username=True, hashtag=True, punctuation=True, RT=False, numbers=True):
     norm_phrase = phrase.lower().strip()
 
     #replace url by tag URL
@@ -26,8 +26,14 @@ def normalize_punctuation(phrase, url=True, username=True, hashtag=True, punctua
     # separate punctuation by space
     if punctuation:
         for punctuation_char in [',', ':', '.', '(', ')', '!', '?', ':', ';', '/', '\"', '*', '^', '\'',
-                                 '_', '[', ']', '+', '-', '\"', '`', '~', '=']:
-            norm_phrase = norm_phrase.replace(punctuation_char, ' ' + punctuation_char+' ')
+                                 '_', '[', ']', '+', '-', '\"', '`', '~', '=', u'\xe2', u'\xc2', u"\u2026",
+                                 u"\u2018", u'\u2019', u'\u201d', u'\u201c', u'\u2039', u'\u2030a', u'\xab', u'\xbb',
+                                 u'\u2033', u'\u2032']:
+            norm_phrase = norm_phrase.replace(punctuation_char, ' ' + punctuation_char +' ')
+
+    # separate number from text
+    if numbers:
+        norm_phrase = re.sub(ur'(\d+)', r' \1 ', norm_phrase)
 
     #delete #
     if hashtag:
