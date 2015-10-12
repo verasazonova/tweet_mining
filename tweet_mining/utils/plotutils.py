@@ -139,14 +139,21 @@ def extract_conditions(data, conditions=None):
         return data
     data_c = data
 
-    # a list of (ind, value) tuples
+    # a list of (ind, value) tuples or of (ind, [val1, val2, val3]) tuples
     for ind, val in conditions:
-        data_c = data_c[data_c[:, ind] == val]
+#        if isinstance(val, list):
+#            tmp = []
+#            for v in val:
+#                tmp.append(data_c[data_c[:, ind] == val])
+#                print tmp
+ #           data_c = np.concatenate(tmp)
+ #       else:
+         data_c = data_c[data_c[:, ind] == val]
 
     return data_c
 
 
-def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, conditions=None, witherror=False,
+def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker='o', cdict=None, conditions=None, witherror=False,
                               series=False, labels=None):
 
     data = extract_conditions(data_raw, conditions)
@@ -158,10 +165,10 @@ def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker, cdict=None, co
         if series:
             xvals, yvals, yerrs = extract_data_series(data, xind, yind, cind, cval)
             if cval in labels:
-                print labels[cval],
+                print "%-10s" % labels[cval],
             else:
-                print cval,
-            print len(xvals), yvals.mean()
+                print "%-10s" % cval,
+            print "%.4f +- %.4f" % (yvals.mean(), yvals.std())
         else:
             xvals, yvals, yerrs = extract_xy_average(data, xind, yind, cind, cval)
             print cval, xvals, yvals, yerrs
@@ -194,7 +201,7 @@ def extract_base(data, xind, yind, cind, cval):
     return xvals, yvals
 
 
-def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None):
+def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None, labels=None):
 
     data = extract_conditions(data_raw, conditions)
 
@@ -202,43 +209,147 @@ def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None)
 
     for cval in cvals:
         xvals, yvals = extract_base(data, xind, yind, cind, cval)
-        plt.plot(xvals, yvals, '--', color=cdict[cval])
+        if cdict is None:
+            color = 'k'
+        elif isinstance(cdict, string_types):
+            color = cdict
+        else:
+            color = cdict[cval]
+        if labels is None or cval not in labels:
+            label = cval
+        else:
+            label = labels[cval]
+        plt.plot(xvals, yvals, '--', color=color, label=label)
 
 
 def make_labels(title=""):
-    plt.legend(loc=4)
-    plt.xlabel("W2V corpus length")
-    plt.ylabel("F-Score")
-    plt.title(title)
-    plt.ylim([0.66, 0.79])
-    plt.xlim([0, 1.6e6])
     plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
+    plt.xlabel("Length of w2v corpus (labeled + unlabeled data)")
+    plt.ylabel("F-score for minority class")
+    plt.title(title)
+    plt.legend(loc='lower center', bbox_to_anchor=(0.5, -0.1), ncol=3, fancybox=True, shadow=True)
 
 
-def plot_curves_baseslines():
+def read_data(dataname, cind=2):
+    types = {}
+    def convert_str_type(s):
+        s1 = s.strip()
+        if s1 in types.keys():
+            return types[s1]
+        else:
+            types[s1] = len(types) + 1
+        return types[s1]
 
-    data_100 = np.loadtxt("w2v_f-scores-100-10.txt")
-    data_300 = np.loadtxt("w2v_f-scores-300-10.txt")
-    data_avg = np.loadtxt("w2v_avg_f-scores-300-10.txt")
-    data_bow = np.loadtxt("bow_f-scores-100-10.txt")
+    converter = {2: convert_str_type}
 
-    TYPES = {'avg': 0, 'std': 1, 'cluster': 2}
-    converter = {2: lambda s: TYPES[s.strip()]}
+    name = dataname+"_lr_fscore.txt"
+    if isfile(name):
+        data = np.loadtxt(name, delimiter=',', converters=converter)
+        inv_types = dict([(v, k) for (k, v) in types.items()])
+        cvals = sorted(list(set(data[:, cind])))
+        cmap = get_cmap(len(cvals))
+        cdict = {}
+        for i, cval in enumerate(cvals):
+            cdict[cval] = cmap(i)
+        return data, cdict, inv_types
 
-    data_recent = np.loadtxt("sent2_fscore.txt", delimiter=',', converters=converter)
+    return None
 
-    cvals = sorted(list(set(np.concatenate([data_100[:, 2], data_300[:,2], data_avg[:, 2], data_bow[:, 1]]))))
+
+def plot_diff1_dep(dataname, withold=False):
+
+
+    data, cdict, names = read_data(dataname, 3)
+
+    if withold:
+
+        dataname_old = "../100D-vs-features/"+dataname
+        data_old, cdict_old, names_old = read_data(dataname_old, 5)
+        plot_multiple_xy_averages(data_old, 2, 8, 5, cdict=cdict_old, marker='o', witherror=True, series=False,
+                                  labels={0.0: "w2v (100) 160,000", 0.4:"w2v(100) 160,000 + 640,000"})
+        names = names_old
+        cdict = cdict_old
+
+    labels = [name[3:] for name in sorted(names.values())]
+    plot_multiple_xy_averages(data, 2, 9, 3, cdict=cdict, marker='s',witherror=True, series=False,
+                              labels={100: "w2v(100) precision", 200:"w2v(200) precision"})
+
+    plot_multiple_xy_averages(data, 2, 10, 3, cdict=cdict, marker='o',witherror=True, series=False,
+                              labels={100: "w2v(100) recall", 200:"w2v(200) recall"})
+
+    plt.gca().set_xticks(range(1, len(labels)),)
+    plt.gca().set_xticklabels(labels, rotation=45, ha='center')
+    plt.gca().tick_params(axis='x', labelsize=8)
+    plt.grid()
+
+#    data_bow = np.loadtxt("../bow_f-scores-100-10.txt")
+#    plot_multiple_bases(data_bow, 2, 3, 1, cdict='k', conditions=[(1, 0.1)], labels={0.1:'bow'})
+    plt.ylabel("Precision / Recall ")
+    plt.title("w2v vs features for different w2v sizes for mpeketoni ")
+    plt.xlabel("W2V features")
+    plt.legend(loc=4)
+    plt.savefig(dataname+"_diff2.pdf")
+
+
+def plot_tweet_sentiment(dataname):
+
+    #TYPES = {'0_avg': 0, '1_std': 1, '2_diff0_1':2, '3_diff0_2':3, '4_diff0_3':4,
+    #         '5_diff1_1':5, '6_diff1_2':6, '7_diff1_3':7, 'cluster':8}
+    types = {}
+    def convert_str_type(s):
+        if s in types.keys():
+            return types[s]
+        else:
+            types[s] += len(types) + 1
+
+    converter = {2: convert_str_type}
+
+    inv_types = dict([(v, k) for (k, v) in types.items()])
+    inv_types[8]= 'cluster'
+    print inv_types
+
+    #data_bow = np.loadtxt("../bow_f-scores-100-10.txt")
+
+    data_lr = {}
+    ps = [0.001, 0.01, 0.1]
+    for p in ps:
+        name = dataname+"_"+str(p).replace("0.", "") + "_lr_fscore.txt"
+        if isfile(name):
+            data_lr[p] = np.loadtxt(name, delimiter=',', converters=converter)
+
+    cvals = sorted(types.values())
     cmap = get_cmap(len(cvals))
     cdict = {}
     for i, cval in enumerate(cvals):
         cdict[cval] = cmap(i)
 
-    plot_multiple_xy_averages(data_recent, 7, 8, 4, 's', cdict=cdict, conditions=[(2, TYPES['avg'])])
-    plot_multiple_xy_averages(data_recent, 7, 8, 4, 'v', cdict=cdict, conditions=[(2, TYPES['std'])])
-    plot_multiple_xy_averages(data_recent, 7, 8, 4, '<', cdict=cdict, conditions=[(2, TYPES['cluster'])])
-    plot_multiple_bases(data_bow, 2, 3, 1, cdict=cdict)
-    make_labels("W2V different features")
-    plt.savefig("w2v.pdf")
+    markers = ['o', '<', 's']
+    #for p, marker in zip(ps, markers):
+    #    if p in data_lr:
+    #        # add length of labeled data to the unlabeled data
+    #        data_lr[p][:, 7] += data_lr[p][:, 6]
+    #        for cval in [types['0_avg'], types['1_std'], types['4_diff0_3'], types['7_diff1_3'], types['cluster']]:
+    #            plot_multiple_xy_averages(data_lr[p], 7, 8, 2, cdict=cdict, witherror=False, series=False,
+    #                                  labels=inv_types, conditions=[(2, cval)], marker=marker)
+
+    #plot_multiple_bases(data_bow, 2, 3, 1, cdict='k')
+    #make_labels("All features")
+    #plt.savefig(dataname + "_w2v.pdf")
+
+    plt.figure()
+    labels = {}
+    for p, marker in zip(ps, markers):
+        if p in data_lr:
+            # add length of labeled data to the unlabeled data
+            data_lr[p][:, 7] += data_lr[p][:, 6]
+            for cval in [types['0_avg'], types['1_std']]:
+                labels[cval] = "%s_%0.3f" % (inv_types[cval], p)
+                plot_multiple_xy_averages(data_lr[p], 7, 8, 2, cdict=cdict, witherror=False, series=False,
+                                      labels=labels, conditions=[(2, cval)], marker=marker)
+
+    #plot_multiple_bases(data_bow, 2, 3, 1, cdict='k')
+    make_labels("Tweet sentiment dataset.")
+    plt.savefig(dataname + "_100_w2v.pdf")
 
 
 def plot_kenyan_data(dataname):
@@ -247,7 +358,8 @@ def plot_kenyan_data(dataname):
              '5_diff1_1':5, '6_diff1_2':6, '7_diff1_3':7, 'cluster':8}
     converter = {2: lambda s: TYPES[s.strip()]}
 
-    inv_types = dict([(v, k) for (k, v) in TYPES.items()])
+    inv_types = dict([(v, k[2:]) for (k, v) in TYPES.items()])
+    inv_types[8]= 'cluster'
     print inv_types
 
     for suffix in ["lr", "svm"]:
@@ -261,7 +373,10 @@ def plot_kenyan_data(dataname):
             for i, cval in enumerate(cvals):
                 cdict[cval] = cmap(i)
 #            plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
-            plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True, labels=inv_types)
+
+            for cval in [TYPES['0_avg'], TYPES['1_std'], TYPES['4_diff0_3'], TYPES['7_diff1_3'], TYPES['cluster']]:
+                plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+                                      labels=inv_types, conditions=[(2, cval)])
 
             plt.grid()
 
@@ -274,5 +389,8 @@ def plot_kenyan_data(dataname):
             plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=3,
                        fancybox=True, shadow=True)
 
+            plt.ylabel("Minority f-score")
+            plt.title("Mpeketoni dataset")
+            plt.xlabel("5 trials of 5-fold xvalidation")
 
     plt.savefig(dataname+"w2v.pdf")

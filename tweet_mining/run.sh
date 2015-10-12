@@ -5,62 +5,101 @@
 echo $1
 MAIN_PY="/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/tweet_analyzer.py"
 
-if [ "$1" == "train.csv" ]; then
+if [ "$1" == "sentiment" ]; then
     # For sentiment dataset
-    DATA_DIR="/Users/verasazonova/Work/TweetSentiment"
-    DATA="/Users/verasazonova/Work/TweetSentiment/trainingandtestdata/train.csv"
+    DATA_DIR="/Users/verasazonova/Work/TweetSentiments"
+    DATA=$DATA_DIR"/trainingandtestdata/train.csv"
 
     DATE=`date +%Y-%m-%d-%H-%M`
-    mkdir $DATA_DIR/$DATE
-    pushd $DATA_DIR/$DATE
+
+    if [ "$#" -le 1 ]; then
+
+        CUR_DIR=$DATA_DIR/$DATE
+        mkdir $CUR_DIR
+
+    else
+        CUR_DIR=$DATA_DIR/$2
+
+    fi
+
+    pushd $CUR_DIR
 
     # check model for consistency in finding similar words
     # the test file is hardcoded
-    DATE=`date +%Y-%m-%d-%H-%M`
-    DNAME="sentiment"
+    DNAME_BASE="sentiment"
     OUTPUT=$DNAME".txt"
 
     touch $OUTPUT
 
-    PS="0.001 0.01 0.1"
-    THRESHS="0.0 0.1 0.4 0.8"
-    NS="0 1 2 3 4"
+    PS="0.01"
+    THRESHS="0.0"
+    NS="0"
     CLFS="w2v"
 
     for P in $PS; do
+        DNAME=$DNAME_BASE #"_"${P/0./}
         for THRESH in $THRESHS; do
             for N in $NS; do
                 for CLF in $CLFS; do
                     NAME=$DNAME_${P/0./}_${THRESH/0./}".txt"
-                    python $MAIN_PY -f train.csv --dname $DNAME --size 100 --window 10 --min 1 --nclusters 30 --clusthresh 0  --p $P --thresh $THRESH --ntrial $N --clfname $CLF --action classify --rebuild >> $NAME
+                    python $MAIN_PY -f $DATA --dname $DNAME --size 100 --window 10 --min 1 --nclusters 30 --clusthresh 0  --p $P --thresh $THRESH --ntrial $N --clfname $CLF --clfbase lr --action classify
                 done
             done
         done
     done
 
+#    python $MAIN_PY --dname $DNAME --action plot
 
-
-    python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 5  --window 10 --nclusters 30 --clusthresh 800 --clfname w2v  --clfbase lr  --action classify --rebuild
+    popd
 
 else
 
     DATA_DIR="/Users/verasazonova/Work/HateSpeech/"$1
     DATA="../"$1"_annotated_positive.csv"
 
+    if [ "$#" -ge 2 ]; then
+
+        DATA2="../../"$2"/"$2".csv"
+
+    else
+        DATA2=""
+
+    fi
+
+    echo $DATA2
+
     DATE=`date +%Y-%m-%d-%H-%M`
-    mkdir $DATA_DIR/$DATE
-    pushd $DATA_DIR/$DATE
+
+    if [ "$#" -le 1 ]; then
+
+        CUR_DIR=$DATA_DIR/$DATE
+        mkdir $CUR_DIR
+
+    else
+        CUR_DIR=$DATA_DIR/$2
+
+    fi
+
+    pushd $CUR_DIR
 
     # check model for consistency in finding similar words
     # the test file is hardcoded
-    DATE=`date +%Y-%m-%d-%H-%M`
     DNAME=$1
     OUTPUT=$DNAME".txt"
 
+    NS="0 1 2 3 4"
+    SIZES="100 200 300"
+
     touch $OUTPUT
-    python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 1  --window 10 --nclusters 30 --clusthresh 0 --clfname w2v  --clfbase lr  --action classify --rebuild >> $OUTPUT
+    for SIZE in $SIZES; do
+        for N in $NS; do
+            python $MAIN_PY -f $DATA $DATA2 --dname $DNAME  --size $SIZE  --min 1  --window 10 --nclusters 30 --ntrial $N --clusthresh 0 --clfname w2v  --clfbase lr  --action classify
+            rm *.npy
+            rm w2v_model_*
+        done
+    done
     #python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 5  --window 10 --nclusters 30 --clfname bow  --clfbase lr  --action classify >> $OUTPUT
-    python $MAIN_PY --dname $DNAME --action plot >> $OUTPUT
+    #python $MAIN_PY --dname $DNAME --action plot >> $OUTPUT
 
     popd
 

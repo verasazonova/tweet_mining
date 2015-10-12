@@ -80,24 +80,29 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
             self.dictionary = corpora.Dictionary(x_clean)
             self.dictionary.filter_extremes(no_above=self.no_above, no_below=self.no_below)
 
-        # setting the coordinates for different models
+        # setting the coordinates for different models (start, stop)
         size = self.w2v_model.layer1_size
-        self.feature_crd = {'0_avg': range(0, size),
-                            '1_std': range(size, 2*size)}
+        self.feature_crd = {'00_avg': (0, size),
+                            '01_std': (size, 2*size)}
         start = 2*size
         l = size
         for i in range(1,self.diffmax0):
-            name = "%i_diff0_%i" % (1+i, i)
-            val = range(start, start + l)
+            name = "%02d_diff0_%i" % (1+i, i)
+            val = (start, start + l)
             self.feature_crd[name] = val
             start += l
-        l = size - 1
+            name = "%02d_diff0_std_%i" % (1+i, i)
+            val = (start, start + l)
+            self.feature_crd[name] = val
         for i in range(1,self.diffmax1):
-            name = "%i_diff1_%i" % (self.diffmax0 + i, i)
-            val = range(start, start + l)
+            name = "%02d_diff1_%i" % (self.diffmax0 + i, i)
+            val = (start, start + l)
             self.feature_crd[name] = val
             start += l
-            l -= 1
+            name = "%02d_diff1_std_%i" % (self.diffmax0 + i, i)
+            val = (start, start + l)
+            self.feature_crd[name] = val
+            start += l
         logging.info("W2V: got a model %s " % (self.w2v_model,))
         return self
 
@@ -124,14 +129,16 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
             if len(data) > i:
                 data_diff = data - np.roll(data, i, axis=0)
                 features.append(np.median(np.diff(data_diff, axis=0), axis=0))
+                features.append(np.std(np.diff(data_diff, axis=0), axis=0))
             else:
-                features.append(np.zeros((size,)))
+                features.append(np.zeros((2*size,)))
 
         # these features are not differences between words, they are differences between columns !!!!!
         # I don't know what it corresponds to
         for i in range(1, self.diffmax1):
             data_diff = data - np.roll(data, i, axis=1)
-            features.append(np.median(data_diff[:, i:], axis=0))
+            features.append(np.median(data_diff, axis=0))
+            features.append(np.std(data_diff, axis=0))
 
 
         vec = np.concatenate(features)

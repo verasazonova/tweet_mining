@@ -8,10 +8,10 @@ from sklearn.preprocessing import StandardScaler
 import os
 import numpy as np
 import re
-import pickle
 from tweet_mining.utils import ioutils, plotutils
 from tweet_mining.utils import textutils as tu
 import w2v_models
+import pickle
 import lda_models
 import transformers
 import cluster_models
@@ -81,32 +81,70 @@ def run_grid_search(x, y, clf=None, parameters=None, fit_parameters=None):
 
 
 def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
-    scores = np.zeros((n_trials * n_cv))
+    # all cv will be averaged out together
+    scores = np.zeros((n_trials * n_cv, 4))
     for n in range(n_trials):
         logging.info("Testing: trial %i or %i" % (n, n_trials))
 
         x_shuffled, y_shuffled = shuffle(x, y, random_state=n)
         skf = cross_validation.StratifiedKFold(y_shuffled, n_folds=n_cv)  # random_state=n, shuffle=True)
-        scores[n * n_cv:(n + 1) * n_cv] = cross_validation.cross_val_score(clf, x_shuffled, y_shuffled, cv=skf,
-                                                                           scoring='f1',
-                                                                           fit_params=fit_parameters,
-                                                                           verbose=0, n_jobs=1)
+        #score_names = ['accuracy', 'f1', 'precision', 'recall']
+        #metrics = {score: cross_validation.cross_val_score(dt,x_data_tfidf.toarray(), target_arr, cv=cv,scoring=score) for score in scores}
+#            sc = cross_validation.cross_val_score(clf, x_shuffled, y=y_shuffled, cv=skf,
+#                                              scoring=scoring_name,
+#                                              fit_params=fit_parameters,
+#                                              verbose=2, n_jobs=1)
+        predictions = cross_validation.cross_val_predict(clf, x_shuffled, y=y_shuffled, cv=skf, n_jobs=1, verbose=2)
+        n_fold = 0
+        for _, test_ind in skf:
+            for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score,
+                                        sklearn.metrics.recall_score, sklearn.metrics.f1_score]):
+
+                sc = metr(y_shuffled[test_ind], predictions[test_ind])
+                scores[n * n_cv + n_fold, i] = sc
+            n_fold += 1
     #print scores, scores.mean(), scores.std()
     return scores
 
 
-def explore_classifier(x, y, clf=None, n_trials=1):
+def explore_classifier(x, y, clf=None, n_trials=1, orig_data=None):
+    false_positives = []
+    false_negatives = []
+    positives = []
+    print np.bincount(y)
     for n in range(n_trials):
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=n)
-        print x_train[0]
-        clf.fit(x_train, y_train)
-        y_pred = clf.predict(x_test)
-        print(sklearn.metrics.confusion_matrix(y_test, y_pred))
-        print(sklearn.metrics.classification_report(y_test, y_pred))
-        print sklearn.metrics.f1_score(y_test, y_pred)
-        print sklearn.metrics.f1_score(y_test, y_pred, average='weighted')
-#        print sklearn.metrics.f1_score(y_test, y_pred, average='micro')
+        skf = cross_validation.StratifiedKFold(y, n_folds=5)  # random_state=n, shuffle=True)
+        predictions = cross_validation.cross_val_predict(clf, x, y=y, cv=skf, n_jobs=1, verbose=2)
 
+        print len(predictions)
+        print np.bincount(predictions)
+#        x_train, x_test, y_train, y_test, _, orig_test = train_test_split(x, y, orig_data, test_size=0.2, random_state=n)
+#        #print x_train[0]
+#        clf.fit(x_train, y_train)
+#        y_pred = clf.predict(x_test)
+
+        print(sklearn.metrics.confusion_matrix(y, predictions))
+        print(sklearn.metrics.classification_report(y, predictions))
+        print(sklearn.metrics.precision_score(y, predictions))
+        print
+        for i in range(len(predictions)):
+            if predictions[i] != y[i]:
+                if y[i] == 1:
+                    false_negatives.append(orig_data[i])
+                else:
+                    false_positives.append(orig_data[i])
+            if y[i] == 1:
+                positives.append(orig_data[i])
+
+    print len(false_negatives), len(false_positives)
+    false_positives = list(set(false_positives))
+    false_negatives = list(set(false_negatives))
+    print "False positives:", len(false_positives)
+    ioutils.save_positives(false_positives, dataname="false")
+    ioutils.save_positives(false_negatives, dataname="false_negatives")
+    ioutils.save_positives(positives, dataname="positives")
+    print
+    print "False negatives:", len(false_negatives)
 
 #------------------
 def make_x_y(filename, fields=None):
@@ -124,112 +162,142 @@ def make_x_y(filename, fields=None):
         print np.bincount(indices)
     else:
         indices = None
-    return tweet_text_corpus, indices, dataset.stoplist
+
+    if dataset.id_pos is not None:
+        ids = [tweet[dataset.id_pos] for tweet in dataset]
+    else:
+        ids = None
+    return tweet_text_corpus, indices, dataset.stoplist, ids
 #------------------
 
-
-def tweet_classification(filename, size, window, dataname, per=None, thr=None, ntrial=None, clf_name='w2v',
-                         unlabeled_filenames=None, clf_base="lr", explore=False, rebuild=False, min_count=1,
-                         recluster_thresh=0):
-
-    x_full, y_full, stoplist = make_x_y(filename, ["text", "label"])
+def read_and_split_data(filename, p=1, thresh=0, n_trial=0, unlabeled_filenames=None, dataname=""):
+    x_full, y_full, stoplist, ids = make_x_y(filename, ["text", "label", "id_str"])
 
     if unlabeled_filenames is not None:
         x_unlabeled = []
         for unlabeled in unlabeled_filenames:
-            x, _, _ = make_x_y(unlabeled, ["text"])
+            x, _, _, _ = make_x_y(unlabeled, ["text"])
             x_unlabeled += x
     else:
         x_unlabeled = []
 
-    if ntrial is None or ntrial == -1:
-        n_trials = range(5)
-    else:
-        n_trials = [ntrial]
-    if per is None or per == -1:
-        ps = [1]
-    else:
-        ps = [per]
-    if thr is None or thr == -1:
-        threshs = [1]  # [0, 0.1, 0.4, 0.8]
-    else:
-        threshs = [thr]
+    logging.info("Classifing for p= %s" % p)
+    logging.info("Classifing for ntrials = %s" % n_trial)
+    logging.info("Classifing for threshs = %s" % thresh)
 
-    n_components = 30
+    if p == 1:
+        x_labeled = x_full
+        y_labeled = y_full
+        ids_l = ids
+    else:
+        x_unlabeled, x_labeled, y_unlabeled, y_labeled, _, ids_l = train_test_split(x_full, y_full, ids, test_size=p,
+                                                                                    random_state=n_trial)
 
-    logging.info("Classifing for p= %s" % ps)
-    logging.info("Classifing for ntrials = %s" % n_trials)
-    logging.info("Classifing for threshs = %s" % threshs)
+    if thresh == 1:
+        x_unlabeled_for_w2v = x_unlabeled
+    else:
+        x_unused, x_unlabeled_for_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
+
+    experiment_name = "%s_%0.3f_%0.1f_%i" % (dataname, p, thresh, n_trial)
+
+    return x_labeled, y_labeled, x_unlabeled_for_w2v, experiment_name, stoplist, ids_l
+
+
+def tweet_classification(filename, size, window, dataname, p=None, thresh=None, n_trial=None, clf_name='w2v',
+                         unlabeled_filenames=None, clf_base="lr", action="classify", rebuild=False, min_count=1,
+                         recluster_thresh=0, n_components=30):
+
 
     if clf_base == "lr":
         clf = LogisticRegression(C=1)
     else:
         clf = SVC(kernel='linear', C=1)
 
-    for p in ps:  #
+    w2v_data_name = dataname+"_w2v_data"
+    w2v_data_scaled_name = dataname+"_scaled_w2v_data"
+    y_data_name = dataname+"_y_data"
+    w2v_feature_crd_name = dataname +"_w2v_f_crd"
 
-        for n in n_trials:
-            print n
-            if p == 1:
-                x_labeled = x_full
-                y_labeled = y_full
+    x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
+                                                                              n_trial=n_trial, dataname=dataname)
+    if not os.path.isfile(w2v_data_scaled_name+".npy"):
 
-            else:
 
-                x_unlabeled, x_labeled, y_unlabeled, y_labeled = train_test_split(x_full, y_full, test_size=p,
-                                                                                  random_state=n)
+        #x_data, y_data, unlabeled_data, run_dataname, stoplist = read_and_split_data(filename=filename, p=p, thresh=thresh,
+        #                                                                      n_trial=n_trial, dataname=dataname)
 
-            if clf_name == 'w2v':
+        # should make this into a separate process to release memory afterwards
+        w2v_data, w2v_feature_crd = build_and_vectorize_w2v(x_data=x_data,y_data=y_data,
+                                                              unlabeled_data=unlabeled_data, window=window,
+                                                              size=size, dataname=run_dataname,
+                                                              rebuild=rebuild,action=action,
+                                                              stoplist=stoplist, min_count=min_count)
 
-                for thresh in threshs:
+        # scale
+        print "Vectorized.  Saving"
 
-                    if thresh == 1:
-                        x_unlabeled_for_w2v = x_unlabeled
-                    else:
-                        x_unused, x_unlabeled_for_w2v = train_test_split(x_unlabeled, test_size=thresh, random_state=0)
+        np.save(w2v_data_name, np.ascontiguousarray(w2v_data))
 
-                    names, scores_array = w2v_classify_tweets(x_data=x_labeled,
-                                                       y_data=y_labeled,
-                                                       unlabeled_data=x_unlabeled_for_w2v,
-                                                       window=window,
-                                                       size=size,
-                                                       min_count=min_count,
-                                                       dataname=dataname,
-                                                       n_components=n_components,
-                                                       clf=clf,
-                                                       stoplist=stoplist,
-                                                       explore=explore,
-                                                       recluster_thresh=recluster_thresh,
-                                                       rebuild=rebuild)
+        pickle.dump(w2v_feature_crd, open(w2v_feature_crd_name, 'wb'))
 
-                    with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
-                        for scores, name in zip(scores_array, names):
-                            for i, score in enumerate(scores):
-                                f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %i \n" %
-                                       (n, i, name, size, p, thresh, len(x_labeled),
-                                        len(x_unlabeled_for_w2v), score, n_components))
+        print "Scaling"
 
-            else:
+        w2v_data = scale_features(w2v_data, w2v_feature_crd)
+        #dpgmm_data = scale_features(dpgmm_data, dpgmm_feature_crd)
+        print "Scaled. Saving"
 
-                clf_pipeline = Pipeline([
-                                         ('bow', transformers.BOWModel(no_above=0.8, no_below=2, stoplist=stoplist)),
-                                         ('clf', clf)])
+        if os.path.isfile(w2v_data_name+".npy"):
+            os.remove(w2v_data_name+".npy")
+        np.save(w2v_data_scaled_name, np.ascontiguousarray(w2v_data))
+        np.save(y_data_name, np.ascontiguousarray(y_data))
 
-                if explore:
-                    explore_classifier(x_labeled, y_labeled, clf_pipeline, n_trials=1)
-                else:
-                    scores = run_cv_classifier(x_labeled, y_labeled, clf=clf_pipeline, n_trials=1, n_cv=5)
-                    with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
-                        for i, score in enumerate(scores):
-                            f.write("%i, %i, %s, %i, %f, %f, %i, %i, %f, %i \n" %
-                                (n, i, "bow", -1, p, -1, len(x_labeled), -1, score, -1))
+        print "Building experiments"
 
-                    print n, "bow", p, len(x_labeled),  scores.mean()
+    else:
+
+        w2v_data = np.load(w2v_data_scaled_name+".npy")
+        #y_data = np.load(y_data_name+".npy")
+        print "loaded data %s" % w2v_data
+        w2v_feature_crd = pickle.load(open(dataname + "_w2v_f_crd", 'rb'))
+        print "Loaded feature crd %s" % w2v_feature_crd
+
+    names, experiments = build_experiments(w2v_feature_crd)
+
+    print "Built experiments: ", names
+    print experiments
+    print action
+
+    with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
+        for name, experiment in zip(names, experiments):
+            print name, experiment
+            inds = []
+            for start, stop in experiment:
+                inds += (range(start, stop))
+
+            if action == "classify":
+
+                scores = run_cv_classifier(w2v_data[:, inds], y_data, clf=clf, n_trials=1, n_cv=5)
+                print name, scores, scores.shape
+
+                for i, score in enumerate(scores):
+                    f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i \n" %
+                           (n_trial, i, name, size, p, thresh, len(w2v_data), len(w2v_data)/p*(p+thresh),
+                            score[0], score[1], score[2], score[3], n_components))
+                f.flush()
+
+            elif action == "explore":
+
+                print np.bincount(y_data)
+                explore_classifier(w2v_data[:, inds], y_data, clf=clf, n_trials=1, orig_data=zip(x_data, ids))
+
+            elif action == "save":
+
+                ioutils.save_liblinear_format_data (dataname + name+"_libl.txt", w2v_data[:, inds], y_data)
 
 
 def build_w2v_model(w2v_corpus, dataname="", window=0, size=0, min_count=0, rebuild=False, explore=False):
     w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window,
-                                                    min_count=min_count, corpus_length=len(w2v_corpus))
+                                                    min_count=min_count)
     logging.info("Looking for model %s" % w2v_model_name)
     if (not rebuild or explore) and os.path.isfile(w2v_model_name):
         w2v_model = w2v_models.load_w2v(w2v_model_name)
@@ -260,89 +328,81 @@ def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=0, dataname="", s
     return dpgmm
 
 
-def w2v_classify_tweets(x_data=None, y_data=None, unlabeled_data=None, window=0, size=0, dataname="", n_components=0,
-                        clf=None, rebuild=False, explore=False, stoplist=None, min_count=1, recluster_thresh=0,
-                        no_above=0.9, no_below=5):
+def build_and_vectorize_w2v(x_data=None, y_data=None, unlabeled_data=None, window=0, size=0, dataname="",
+                        rebuild=False, action="classify", stoplist=None, min_count=1):
 
     w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in np.concatenate([x_data, unlabeled_data])])
+    if action == "explore":
+        explore = True
+    else:
+        explore = False
 
-    logging.info("Classifying %s, %i, %i, %i, %i" % (dataname, len(w2v_corpus), min_count, recluster_thresh, n_components))
-
+    logging.info("Classifying %s, %i, %i" % (dataname, len(w2v_corpus), min_count,))
     # build models
     w2v_model = build_w2v_model(w2v_corpus, dataname=dataname, window=window, size=size, min_count=min_count,
                                 rebuild=rebuild, explore=explore)
 
     # get features from models
-    w2v = transformers.W2VTextModel(w2v_model=w2v_model, no_above=1.0, no_below=1, diffmax0=4, diffmax1=4)
-
-    #dpgmm = build_dpgmm_model(w2v_corpus, w2v_model=w2v_model, n_components=n_components, dataname=dataname,
-    #                          stoplist=stoplist, recluster_thresh=recluster_thresh, alpha=5, no_above=no_above,
-    #                          no_below=no_below)
+    w2v = transformers.W2VTextModel(w2v_model=w2v_model, no_above=1.0, no_below=1, diffmax0=1, diffmax1=5)
 
     # get matrices of features from x_data
     w2v_data = w2v.fit_transform(x_data)
-    #dpgmm_data = dpgmm.transform(x_data)
 
     print w2v_data.shape
-    #print dpgmm_data.shape
 
+    return w2v_data, w2v.feature_crd
+
+
+def build_and_vectorize_dpgmm(x_data=None, y_data=None, unlabeled_data=None, dataname="", n_components=0,
+                        rebuild=False, action="classify", stoplist=None, min_count=1, recluster_thresh=0,
+                        no_above=0.9, no_below=5):
+
+    w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in np.concatenate([x_data, unlabeled_data])])
 
     dpgmm = transformers.DPGMMClusterModel(w2v_model=None, n_components=n_components, dataname=dataname,
                                            stoplist=stoplist, recluster_thresh=0, no_above=no_above, no_below=no_below,
                                            alpha=5)
+
+    pickle.dump(dpgmm, open(dataname+"_dpgmm", 'wb'))
+
     dpgmm.fit(w2v_corpus)
     dpgmm_data = dpgmm.transform(x_data)
 
+    pickle.dump(dpgmm_data, open(dataname+"_dpgmm_data", 'wb'))
+
+
+    return dpgmm_data, dpgmm.feature_crd
+
+
+def scale_features(data, feature_crd):
     # scale features
-    for name, inds in w2v.feature_crd.items():
-        w2v_data[:, inds] = StandardScaler().fit_transform(w2v_data[:, inds])
+    for name, (start, end) in feature_crd.items():
+        data[:, start:end] = StandardScaler().fit_transform(data[:, start:end])
 
-    for name, inds in dpgmm.feature_crd.items():
-        dpgmm_data[:, inds] = StandardScaler().fit_transform(dpgmm_data[:, inds])
 
+    print "scaled"
+
+    return data
+
+
+def build_experiments(feature_crd, names_orig=None, experiments=None):
+    if names_orig is None:
+        names_orig = sorted(feature_crd.keys())
+    if experiments is None:
+        experiments = []
     names = []
-    experiments = []
-
-
-#['0_avg', '1_std', '4_diff0_3', '7_diff1_3']:   #
-    for name in sorted(w2v.feature_crd.keys()):
-        print name
-        names.append(name)
-        if len(experiments) > 0:
-            experiments.append(np.concatenate([experiments[-1], w2v_data[:, w2v.feature_crd[name]]], axis=1))
-        else:
-            experiments.append(w2v_data[:, w2v.feature_crd[name]])
-
-    names.append("cluster")
-    experiments.append(np.concatenate([experiments[-1], dpgmm_data[:, dpgmm.feature_crd['global']]], axis=1))
-
-    #x_data_cluster = np.concatenate([x_data_std_diff2, dpgmm_data[:, dpgmm.feature_crd['global']]], axis=1)
-
-    #names = ['avg', 'std', 'diff0_1', 'diff0_2', 'diff0_3', 'all']
-    #experiments = [x_data_avg, x_data_std, x_data_std_diff, x_data_std_diff2, x_data_std_diff3, x_data_std_all]
-
-    if explore:
-
-        for experiment in experiments:
-            explore_classifier(experiment, y_data, clf=clf, n_trials=1)
-
-        return [], []
-    else:
-
-        results = []
-        for name, experiment in zip(names, experiments):
-            scores = run_cv_classifier(experiment, y_data, clf=clf, n_trials=1, n_cv=5)
-            print name, scores, scores.mean()
-            results.append(scores)
-
-        return names, results
+    for name in names_orig:
+        if int(name[:2]) >= 0:
+            names.append(name)
+            experiments.append( [(0, feature_crd[name][1])])
+    return names, experiments
 
 
 def w2v_cluster_tweet_vocab(filename, window=0, size=0, dataname="", n_components=0, min_count=1,
                             rebuild=False):
 
     print "Clustering"
-    x_data, y_data, stoplist = make_x_y(filename, ["text"])
+    x_data, y_data, stoplist, _ = make_x_y(filename, ["text"])
     w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in x_data])
 
     #w2v_model = build_w2v_model(w2v_corpus, dataname=dataname, window=window, size=size, min_count=min_count,
@@ -392,7 +452,10 @@ def print_tweets(filename):
 
 
 def plot_scores(dataname):
-    plotutils.plot_kenyan_data(dataname)
+#    if dataname == "sentiment":
+    plotutils.plot_diff1_dep(dataname, withold=False)
+#    else:
+#        plotutils.plot_kenyan_data(dataname)
 
 
 def __main__():
@@ -406,9 +469,9 @@ def __main__():
     parser.add_argument('--min', action='store', dest='min', default='1', help='Number of LDA topics')
     parser.add_argument('--nclusters', action='store', dest='nclusters', default='30', help='Number of LDA topics')
     parser.add_argument('--clusthresh', action='store', dest='clusthresh', default='0', help='Threshold for reclustering')
-    parser.add_argument('--p', action='store', dest='p', default='-1', help='Fraction of labeled data')
-    parser.add_argument('--thresh', action='store', dest='thresh', default='-1', help='Fraction of unlabelled data')
-    parser.add_argument('--ntrial', action='store', dest='ntrial', default='-1', help='Number of the trial')
+    parser.add_argument('--p', action='store', dest='p', default='1', help='Fraction of labeled data')
+    parser.add_argument('--thresh', action='store', dest='thresh', default='0', help='Fraction of unlabelled data')
+    parser.add_argument('--ntrial', action='store', dest='ntrial', default='0', help='Number of the trial')
     parser.add_argument('--clfbase', action='store', dest='clfbase', default='lr', help='Number of the trial')
     parser.add_argument('--clfname', action='store', dest='clfname', default='w2v', help='Number of the trial')
     parser.add_argument('--action', action='store', dest='action', default='plot', help='Number of the trial')
@@ -433,27 +496,19 @@ def __main__():
 
 
     # runs a classification experiement a given file
-    if arguments.action == "classify":
+    if arguments.action == "classify" or arguments.action == "explore" or arguments.action == "save":
         if len(arguments.filename) > 1:
             tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
-                             per=percentage, thr=threshhold, ntrial=ntrial, min_count=min_count,
+                             p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
                              clf_name=arguments.clfname, unlabeled_filenames=arguments.filename[1:],
                              clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
-                             rebuild=arguments.rebuild)
+                             rebuild=arguments.rebuild, action=arguments.action)
         else:
             tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
-                             per=percentage, thr=threshhold, ntrial=ntrial, min_count=min_count,
+                             p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
                              clf_name=arguments.clfname, unlabeled_filenames=None,
                              clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
-                             rebuild=arguments.rebuild)
-
-    # debugs a classification experiement a given file
-    elif arguments.action == "explore":
-        tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
-                             per=percentage, thr=threshhold, ntrial=ntrial, min_count=min_count,
-                             clf_name=arguments.clfname, unlabeled_filenames=arguments.filename[1:],
-                             clf_base=arguments.clfbase, explore=True, recluster_thresh=recluster_thresh,
-                             rebuild=arguments.rebuild)
+                             rebuild=arguments.rebuild, action=arguments.action)
 
     # clusters the vocabulary of a given file accoding to the w2v model constructed on the same file
     elif arguments.action == "cluster":
@@ -477,6 +532,7 @@ def __main__():
 
     # plot results of a classification experiment for a certain dataname
     elif arguments.action == "plot":
+        print "plot"
         plot_scores(arguments.dataname)
 
     # merge a unlabeled dataset, with positive labels to produce a positively labeled dataset

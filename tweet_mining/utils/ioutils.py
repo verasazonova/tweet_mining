@@ -61,7 +61,8 @@ def read_tweets(filename, fields):
                 else:
                     row_str = ", ".join(row).split('\r\n')
                     data.append([fix_corrupted_csv_line(row_str[0])[pos] for pos in field_positions])
-                    data.append([fix_corrupted_csv_line(row_str[1])[pos] for pos in field_positions])
+                    if len(row_str) > 1:
+                        data.append([fix_corrupted_csv_line(row_str[1])[pos] for pos in field_positions])
 
             #data = [[row[pos] for pos in field_positions] for row in reader]
         except csv.Error as e:
@@ -143,6 +144,16 @@ def clean_save_tweet_text(filename, fields):
         fout.write("\",\"".join(fields)+"\n")
         for row in data:
             fout.write(" ".join(row)+"\n")
+
+
+def save_liblinear_format_data(filename, x_data, y_data):
+
+    with open(filename, 'w') as fout:
+        for x, y in zip(x_data, y_data):
+            fout.write("%i " % int((y-0.5)*2) )
+            for i, coordinate in enumerate(x):
+                fout.write("%i:%f " % (i+1, coordinate))
+            fout.write("\n")
 
 
 class KenyanCSVMessage():
@@ -231,19 +242,32 @@ def utf_8_encoder(unicode_csv_data):
 
 
 def make_positive_labeled_kenyan_data(dataname):
-    dataset_positive = KenyanCSVMessage(dataname+"_positive.csv", fields=["text"])
+    dataset_positive = KenyanCSVMessage(dataname+"_positive.csv", fields=["id_str"])
     data_positive = [tweet[dataset_positive.text_pos] for tweet in dataset_positive]
 
-    dataset = KenyanCSVMessage(dataname+".csv", fields=["text"])
+    print len(data_positive)
+    dataset = KenyanCSVMessage(dataname+".csv", fields=["text", "id_str"])
 
+    cnt_pos = 0
     with codecs.open(dataname+"_annotated_positive.csv", 'w', encoding='utf-8') as fout:
-        fout.write("text,label\n")
-        for tweet in dataset:
-            if tweet[dataset.text_pos] in data_positive:
-                fout.write("\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",T\n")
+        fout.write("id_str,text,label\n")
+        for cnt, tweet in enumerate(dataset):
+            if cnt % 10000 == 0:
+                print cnt, cnt_pos
+            if tweet[dataset.id_pos] in data_positive:
+                cnt_pos += 1
+                fout.write(tweet[dataset.id_pos] + ",\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",T\n")
             else:
-                fout.write("\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",F\n")
+                fout.write(tweet[dataset.id_pos] + ",\"" + tweet[dataset.text_pos].replace("\"", "\"\"") + "\",F\n")
 
+    print cnt_pos
+
+
+def save_positives(positives, dataname):
+    with codecs.open(dataname+"_additional_positives.csv", 'w', encoding='utf-8') as fout:
+        fout.write("id_str,text\n")
+        for tweet, id in positives:
+            fout.write(id + ",\"" + tweet.replace("\"", "\"\"") + "\"\n")
 
 def save_words_representations(filename, word_list, vec_list):
     # saving word representations

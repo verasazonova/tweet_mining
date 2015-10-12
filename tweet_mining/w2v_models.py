@@ -2,7 +2,6 @@ __author__ = 'verasazonova'
 
 import numpy as np
 
-from six import string_types
 from tweet_mining.utils import textutils as tu
 from gensim.models.doc2vec import LabeledSentence
 from gensim.models import Word2Vec, Doc2Vec
@@ -13,8 +12,8 @@ import logging
 
 # **************** W2V relating functions ******************************
 
-def make_w2v_model_name(dataname, size, window, min_count, corpus_length):
-    return "w2v_model_%s_%i_%i_%i_%.2g" % (dataname, size, window, min_count, corpus_length)
+def make_w2v_model_name(dataname, size, window, min_count):
+    return "w2v_model_%s_%i_%i_%i" % (dataname, size, window, min_count)
 
 def make_dpgmm_model_name(dataname, n_components, n_above=0, n_below=0, alpha=5):
     return "dpgmm_model_%s_%i_%i_%.1f_%.0f" % (dataname, n_components, alpha, n_above, n_below)
@@ -52,7 +51,7 @@ def build_word2vec(text_corpus, size=100, window=10, min_count=2, dataname="none
                              sample=1e-3, seed=1, workers=4, hs=1, min_alpha=0.0001, sg=1, cbow_mean=0)
 
     logging.info("%s" % w2v_model)
-    w2v_model_name = make_w2v_model_name(dataname, size, window, min_count, len(text_corpus))
+    w2v_model_name = make_w2v_model_name(dataname, size, window, min_count)
     w2v_model.save(w2v_model_name)
 
     return w2v_model
