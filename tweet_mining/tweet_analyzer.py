@@ -80,6 +80,19 @@ def run_grid_search(x, y, clf=None, parameters=None, fit_parameters=None):
     return grid_clf.best_score_
 
 
+def run_train_test_classifier(x_train, y_train, x_test, y_test, clf=None):
+    print x_train.shape, y_train.shape, x_test.shape, y_test.shape
+    scores = np.zeros((1, 4))
+    clf.fit(x_train, y_train)
+    predictions = clf.predict(x_test)
+    for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score,
+                              sklearn.metrics.recall_score, sklearn.metrics.f1_score]):
+        sc = metr(y_test, predictions)
+        scores[0, i] = sc
+
+    return scores
+
+
 def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
     # all cv will be averaged out together
     scores = np.zeros((n_trials * n_cv, 4))
@@ -205,7 +218,7 @@ def read_and_split_data(filename, p=1, thresh=0, n_trial=0, unlabeled_filenames=
 
 def tweet_classification(filename, size, window, dataname, p=None, thresh=None, n_trial=None, clf_name='w2v',
                          unlabeled_filenames=None, clf_base="lr", action="classify", rebuild=False, min_count=1,
-                         recluster_thresh=0, n_components=30):
+                         recluster_thresh=0, n_components=30, experiment_nums=None, test_filename=None):
 
 
     if clf_base == "lr":
@@ -220,6 +233,16 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
     x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
                                                                               n_trial=n_trial, dataname=dataname)
+
+    train_data_end = len(y_data)
+
+    if test_filename is not None:
+        x_test, y_test, _, _ = make_x_y(test_filename,["text", "label", "id_str"])
+        x_data = np.concatenate([x_data, x_test])
+        y_data = np.concatenate([y_data, y_test])
+        print x_data.shape, y_data.shape
+
+
     if not os.path.isfile(w2v_data_scaled_name+".npy"):
 
 
@@ -261,7 +284,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         w2v_feature_crd = pickle.load(open(dataname + "_w2v_f_crd", 'rb'))
         print "Loaded feature crd %s" % w2v_feature_crd
 
-    names, experiments = build_experiments(w2v_feature_crd)
+    names, experiments = build_experiments(w2v_feature_crd, experiment_nums=experiment_nums)
 
     print "Built experiments: ", names
     print experiments
@@ -276,7 +299,11 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
             if action == "classify":
 
-                scores = run_cv_classifier(w2v_data[:, inds], y_data, clf=clf, n_trials=1, n_cv=5)
+                if test_filename is not None:
+                    scores = run_train_test_classifier(w2v_data[0:train_data_end, inds], y_data[0:train_data_end],
+                                                       w2v_data[train_data_end:, inds], y_data[train_data_end:], clf=clf)
+                else:
+                    scores = run_cv_classifier(w2v_data[:, inds], y_data, clf=clf, n_trials=1, n_cv=5)
                 print name, scores, scores.shape
 
                 for i, score in enumerate(scores):
@@ -343,7 +370,7 @@ def build_and_vectorize_w2v(x_data=None, y_data=None, unlabeled_data=None, windo
                                 rebuild=rebuild, explore=explore)
 
     # get features from models
-    w2v = transformers.W2VTextModel(w2v_model=w2v_model, no_above=1.0, no_below=1, diffmax0=1, diffmax1=5)
+    w2v = transformers.W2VTextModel(w2v_model=w2v_model, no_above=1.0, no_below=1, diffmax0=1, diffmax1=3)
 
     # get matrices of features from x_data
     w2v_data = w2v.fit_transform(x_data)
@@ -384,15 +411,16 @@ def scale_features(data, feature_crd):
 
     return data
 
-
-def build_experiments(feature_crd, names_orig=None, experiments=None):
+# experiment_nums = is a list of feature #s to add to experiments.
+# experiment_nums = [0,1] to add [avg, std] to the list
+def build_experiments(feature_crd, names_orig=None, experiment_nums=None):
     if names_orig is None:
         names_orig = sorted(feature_crd.keys())
-    if experiments is None:
-        experiments = []
+    experiments = []
+    print "Building experiments: ", experiment_nums
     names = []
     for name in names_orig:
-        if int(name[:2]) >= 0:
+        if (experiment_nums is None) or (int(name[:2]) in experiment_nums):
             names.append(name)
             experiments.append( [(0, feature_crd[name][1])])
     return names, experiments
@@ -462,6 +490,7 @@ def __main__():
 
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('-f', action='store', dest='filename', nargs='+', help='Filename')
+    parser.add_argument('--test', action='store', dest='test_filename', default="", help='Filename')
     parser.add_argument('--dname', action='store', dest='dataname', default="log", help='Output filename')
     parser.add_argument('-n', action='store', dest='ntopics', default='10', help='Number of LDA topics')
     parser.add_argument('--size', action='store', dest='size', default='100', help='Size w2v of LDA topics')
@@ -476,6 +505,7 @@ def __main__():
     parser.add_argument('--clfname', action='store', dest='clfname', default='w2v', help='Number of the trial')
     parser.add_argument('--action', action='store', dest='action', default='plot', help='Number of the trial')
     parser.add_argument('--rebuild', action='store_true', dest='rebuild', help='Number of the trial')
+    parser.add_argument('--exp_num', action='store', dest='exp_nums', nargs='+', help='Experiments to save')
 
 
     arguments = parser.parse_args()
@@ -494,6 +524,16 @@ def __main__():
     threshhold = float(arguments.thresh)
     percentage = float(arguments.p)
 
+    if arguments.test_filename != "":
+        test_filename = arguments.test_filename
+    else:
+        test_filename = None
+
+    if arguments.exp_nums:
+        exp_nums = [int(n) for n in arguments.exp_nums]
+    else:
+        exp_nums = None
+
 
     # runs a classification experiement a given file
     if arguments.action == "classify" or arguments.action == "explore" or arguments.action == "save":
@@ -502,13 +542,15 @@ def __main__():
                              p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
                              clf_name=arguments.clfname, unlabeled_filenames=arguments.filename[1:],
                              clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
-                             rebuild=arguments.rebuild, action=arguments.action)
+                             rebuild=arguments.rebuild, action=arguments.action,
+                             experiment_nums=exp_nums)
         else:
             tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
                              p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
                              clf_name=arguments.clfname, unlabeled_filenames=None,
                              clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
-                             rebuild=arguments.rebuild, action=arguments.action)
+                             rebuild=arguments.rebuild, action=arguments.action,
+                             experiment_nums=exp_nums, test_filename=test_filename)
 
     # clusters the vocabulary of a given file accoding to the w2v model constructed on the same file
     elif arguments.action == "cluster":

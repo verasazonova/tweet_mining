@@ -84,22 +84,27 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
         size = self.w2v_model.layer1_size
         self.feature_crd = {'00_avg': (0, size),
                             '01_std': (size, 2*size)}
+        feature_cnt = 2
         start = 2*size
         l = size
         for i in range(1,self.diffmax0):
-            name = "%02d_diff0_%i" % (1+i, i)
+            name = "%02d_diff0_%i" % (feature_cnt, i)
+            feature_cnt += 1
             val = (start, start + l)
             self.feature_crd[name] = val
             start += l
-            name = "%02d_diff0_std_%i" % (1+i, i)
+            name = "%02d_diff0_std_%i" % (feature_cnt, i)
+            feature_cnt += 1
             val = (start, start + l)
             self.feature_crd[name] = val
         for i in range(1,self.diffmax1):
-            name = "%02d_diff1_%i" % (self.diffmax0 + i, i)
+            name = "%02d_diff1_%i" % (feature_cnt, i)
+            feature_cnt += 1
             val = (start, start + l)
             self.feature_crd[name] = val
             start += l
-            name = "%02d_diff1_std_%i" % (self.diffmax0 + i, i)
+            name = "%02d_diff1_std_%i" % (feature_cnt, i)
+            feature_cnt += 1
             val = (start, start + l)
             self.feature_crd[name] = val
             start += l
