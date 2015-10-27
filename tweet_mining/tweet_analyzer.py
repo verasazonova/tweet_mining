@@ -230,20 +230,21 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
     w2v_data_scaled_name = dataname+"_scaled_w2v_data"
     y_data_name = dataname+"_y_data"
     w2v_feature_crd_name = dataname +"_w2v_f_crd"
-
-    x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
-                                                                              n_trial=n_trial, dataname=dataname)
-
-    train_data_end = len(y_data)
-
-    if test_filename is not None:
-        x_test, y_test, _, _ = make_x_y(test_filename,["text", "label", "id_str"])
-        x_data = np.concatenate([x_data, x_test])
-        y_data = np.concatenate([y_data, y_test])
-        print x_data.shape, y_data.shape
-
+    ids = []
+    x_data = []
 
     if not os.path.isfile(w2v_data_scaled_name+".npy"):
+
+        x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
+                                                                                  n_trial=n_trial, dataname=dataname)
+
+        train_data_end = len(y_data)
+
+        if test_filename is not None:
+            x_test, y_test, _, _ = make_x_y(test_filename,["text", "label", "id_str"])
+            x_data = np.concatenate([x_data, x_test])
+            y_data = np.concatenate([y_data, y_test])
+            print x_data.shape, y_data.shape
 
 
         #x_data, y_data, unlabeled_data, run_dataname, stoplist = read_and_split_data(filename=filename, p=p, thresh=thresh,
@@ -279,16 +280,19 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
     else:
 
         w2v_data = np.load(w2v_data_scaled_name+".npy")
-        #y_data = np.load(y_data_name+".npy")
+        y_data = np.load(y_data_name+".npy")
         print "loaded data %s" % w2v_data
         w2v_feature_crd = pickle.load(open(dataname + "_w2v_f_crd", 'rb'))
         print "Loaded feature crd %s" % w2v_feature_crd
+        train_data_end = int(p*1600000)
+
 
     names, experiments = build_experiments(w2v_feature_crd, experiment_nums=experiment_nums)
 
     print "Built experiments: ", names
     print experiments
     print action
+    print train_data_end, w2v_data.shape
 
     with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
         for name, experiment in zip(names, experiments):
