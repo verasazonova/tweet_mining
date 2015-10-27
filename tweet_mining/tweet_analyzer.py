@@ -334,7 +334,7 @@ def build_w2v_model(w2v_corpus, dataname="", window=0, size=0, min_count=0, rebu
         logging.info("Model created")
     w2v_model.init_sims(replace=True)
 
-    check_w2v_model(w2v_model=w2v_model)
+    #check_w2v_model(w2v_model=w2v_model)
     return w2v_model
 
 
