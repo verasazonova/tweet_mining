@@ -122,7 +122,7 @@ def clean_tweets(data, fields):
     logging.info("First line: %s" % data_sorted[0])
     logging.info("Last line: %s" % data_sorted[-1])
 
-    return data_sorted, date_pos, text_pos, id_pos, label_pos
+    return np.array(data_sorted), date_pos, text_pos, id_pos, label_pos
 
 
 def clean_save_tweet_text(filename, fields):
@@ -179,7 +179,7 @@ class KenyanCSVMessage():
 
         self.data, self.date_pos, self.text_pos, self.id_pos, self.label_pos = \
             clean_tweets(read_tweets(self.filename, self.fields), self.fields)
-        self.data = np.array(self.data)
+        self.data = self.data
         if start_date is None:
             self.start_date = self.data[0][self.date_pos]
         else:
