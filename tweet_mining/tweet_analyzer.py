@@ -21,7 +21,9 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.cross_validation import train_test_split
 from sklearn.pipeline import Pipeline
-
+from memory_profiler import profile
+import time
+from scipy.sparse import csr_matrix
 
 def calculate_and_plot_lda(filename, ntopics, dataname):
     stop_path = "/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/en_swahili.txt"
@@ -80,14 +82,14 @@ def run_grid_search(x, y, clf=None, parameters=None, fit_parameters=None):
     return grid_clf.best_score_
 
 
-def run_train_test_classifier(x_train, y_train, x_test, y_test, clf=None):
-    print x_train.shape, y_train.shape, x_test.shape, y_test.shape
+def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
+    #print x_train.shape, y_train.shape, x_test.shape, y_test.shape
     scores = np.zeros((1, 4))
-    clf.fit(x_train, y_train)
-    predictions = clf.predict(x_test)
+    clf.fit(csr_matrix(x[0:train_end, start:stop]), y[0:train_end])
+    predictions = clf.predict(csr_matrix(x[train_end:, start:stop]))
     for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score,
                               sklearn.metrics.recall_score, sklearn.metrics.f1_score]):
-        sc = metr(y_test, predictions)
+        sc = metr(y[train_end:], predictions)
         scores[0, i] = sc
 
     return scores
@@ -110,7 +112,7 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
         predictions = cross_validation.cross_val_predict(clf, x_shuffled, y=y_shuffled, cv=skf, n_jobs=1, verbose=2)
         n_fold = 0
         for _, test_ind in skf:
-            for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score,
+            for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score   ,
                                         sklearn.metrics.recall_score, sklearn.metrics.f1_score]):
 
                 sc = metr(y_shuffled[test_ind], predictions[test_ind])
@@ -221,8 +223,10 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                          recluster_thresh=0, n_components=30, experiment_nums=None, test_filename=None):
 
 
+    start_time = time.time()
+
     if clf_base == "lr":
-        clf = LogisticRegression(C=1)
+        clf = sklearn.linear_model.SGDClassifier(loss='log', penalty="l2",alpha=0.005, n_iter=5)
     else:
         clf = SVC(kernel='linear', C=1)
 
@@ -279,15 +283,20 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
     else:
 
-        w2v_data = np.load(w2v_data_scaled_name+".npy")
+        print("%s s: " % (time.time() - start_time))
+        w2v_data = np.load(w2v_data_scaled_name+".npy", mmap_mode='c')
+        # this need to be C-order array.
         y_data = np.load(y_data_name+".npy")
+
         print "loaded data %s" % w2v_data
+        print("%s s: " % (time.time() - start_time))
         w2v_feature_crd = pickle.load(open(dataname + "_w2v_f_crd", 'rb'))
         print "Loaded feature crd %s" % w2v_feature_crd
         train_data_end = int(p*1600000)
 
 
     names, experiments = build_experiments(w2v_feature_crd, experiment_nums=experiment_nums)
+    print("%s s: " % (time.time() - start_time))
 
     print "Built experiments: ", names
     print experiments
@@ -296,34 +305,40 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
     with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
         for name, experiment in zip(names, experiments):
+            print("%s s: " % (time.time() - start_time))
             print name, experiment
-            inds = []
-            for start, stop in experiment:
-                inds += (range(start, stop))
+            #inds = []
+            #for start, stop in experiment:
+            #    inds += (range(start, stop))
+            # we will assume for the memory sake that the experiment is continious
+            start = experiment[0][0]
+            stop = experiment[0][1]
 
             if action == "classify":
 
                 if test_filename is not None:
-                    scores = run_train_test_classifier(w2v_data[0:train_data_end, inds], y_data[0:train_data_end],
-                                                       w2v_data[train_data_end:, inds], y_data[train_data_end:], clf=clf)
+                    scores = run_train_test_classifier(w2v_data, y_data, train_data_end, start, stop, clf=clf)
+
+                    #scores = run_train_test_classifier(w2v_data[0:train_data_end, start:stop], y_data[0:train_data_end],
+                    #                                   w2v_data[train_data_end:, start:stop], y_data[train_data_end:], clf=clf)
                 else:
-                    scores = run_cv_classifier(w2v_data[:, inds], y_data, clf=clf, n_trials=1, n_cv=5)
+                    scores = run_cv_classifier(w2v_data[:, start:stop], y_data, clf=clf, n_trials=1, n_cv=5)
                 print name, scores, scores.shape
 
                 for i, score in enumerate(scores):
                     f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i \n" %
-                           (n_trial, i, name, size, p, thresh, len(w2v_data), len(w2v_data)/p*(p+thresh),
+                           (n_trial, i, name, size, p, thresh, w2v_data.shape[0], w2v_data.shape[0]/p*(p+thresh),
                             score[0], score[1], score[2], score[3], n_components))
                 f.flush()
 
             elif action == "explore":
 
                 print np.bincount(y_data)
-                explore_classifier(w2v_data[:, inds], y_data, clf=clf, n_trials=1, orig_data=zip(x_data, ids))
+                explore_classifier(w2v_data[:, start:stop], y_data, clf=clf, n_trials=1, orig_data=zip(x_data, ids))
 
             elif action == "save":
 
-                ioutils.save_liblinear_format_data (dataname + name+"_libl.txt", w2v_data[:, inds], y_data)
+                ioutils.save_liblinear_format_data (dataname + name+"_libl.txt", w2v_data[:, start:stop], y_data)
 
 
 def build_w2v_model(w2v_corpus, dataname="", window=0, size=0, min_count=0, rebuild=False, explore=False):
