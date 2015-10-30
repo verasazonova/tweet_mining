@@ -21,7 +21,6 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.cross_validation import train_test_split
 from sklearn.pipeline import Pipeline
-from memory_profiler import profile
 import time
 from scipy.sparse import csr_matrix
 
