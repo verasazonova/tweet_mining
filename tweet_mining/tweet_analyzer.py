@@ -376,6 +376,7 @@ def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=0, dataname="", s
     return dpgmm
 
 
+
 def build_and_vectorize_w2v(x_data=None, y_data=None, unlabeled_data=None, window=0, size=0, dataname="",
                         rebuild=False, action="classify", stoplist=None, min_count=1,
                         diff1_max=3, diff0_max=0):
