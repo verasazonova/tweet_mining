@@ -299,10 +299,10 @@ def plot_tweet_sentiment(dataname):
 
     data, cdict, names = read_data(dataname, cind=4)
 
-    data2, cdict, names2 = read_data("../2015-10-25-18-56/"+dataname, cind=4, cdict=cdict)
+    #data2, cdict, names2 = read_data("../2015-10-25-18-56/"+dataname, cind=4, cdict=cdict)
 
-    data = np.concatenate([data, data2])
-    names.update(names2)
+    #data = np.concatenate([data, data2])
+    #names.update(names2)
 
     print names
     markers = ['o', '<', 's']
@@ -317,12 +317,12 @@ def plot_tweet_sentiment(dataname):
                                       0.1: "10%% - %s" % names[2][3:],
                                       1: "100%% - %s" % names[2][3:]})
     plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='x', witherror=True, series=False,
-                              conditions=[(2, 6)],
-                              labels={0.001: "0.1%% - %s" % names[6][3:],
-                                      0.01: "1%% - %s" % names[6][3:],
-                                      0.5: "50%% - %s" % names[6][3:],
-                                      0.1: "10%% - %s" % names[6][3:],
-                                      1: "100%% - %s" % names[6][3:]})
+                              conditions=[(2, 9)],
+                              labels={0.001: "0.1%% - %s" % names[9][3:],
+                                      0.01: "1%% - %s" % names[9][3:],
+                                      0.5: "50%% - %s" % names[9][3:],
+                                      0.1: "10%% - %s" % names[9][3:],
+                                      1: "100%% - %s" % names[9][3:]})
 
     plt.grid()
     make_labels("Tweet sentiment data")

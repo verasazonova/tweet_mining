@@ -220,7 +220,7 @@ def read_and_split_data(filename, p=1, thresh=0, n_trial=0, unlabeled_filenames=
 def tweet_classification(filename, size, window, dataname, p=None, thresh=None, n_trial=None, clf_name='w2v',
                          unlabeled_filenames=None, clf_base="lr", action="classify", rebuild=False, min_count=1,
                          recluster_thresh=0, n_components=30, experiment_nums=None, test_filename=None,
-                         diff1_max=3, diff0_max=0):
+                         diff1_max=3, diff0_max=1):
 
     experiment_name = "%s_%0.3f_%0.1f_%i" % (dataname, p, thresh, n_trial)
 
@@ -380,7 +380,7 @@ def build_dpgmm_model(w2v_corpus, w2v_model=None, n_components=0, dataname="", s
 
 def build_and_vectorize_w2v(x_data=None, y_data=None, unlabeled_data=None, window=0, size=0, dataname="",
                         rebuild=False, action="classify", stoplist=None, min_count=1,
-                        diff1_max=3, diff0_max=0):
+                        diff1_max=3, diff0_max=1):
 
     w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in np.concatenate([x_data, unlabeled_data])])
     if action == "explore":
@@ -531,8 +531,8 @@ def __main__():
     parser.add_argument('--action', action='store', dest='action', default='plot', help='Number of the trial')
     parser.add_argument('--rebuild', action='store_true', dest='rebuild', help='Number of the trial')
     parser.add_argument('--exp_num', action='store', dest='exp_nums', nargs='+', help='Experiments to save')
-    parser.add_argument('--diff1_max', action='store', dest='diff1_max', default='3', help='Diff 1 max')
-    parser.add_argument('--diff0_max', action='store', dest='diff0_max', default='0', help='Diff 0 max')
+    parser.add_argument('--diff1_max', action='store', dest='diff1_max', default='5', help='Diff 1 max')
+    parser.add_argument('--diff0_max', action='store', dest='diff0_max', default='1', help='Diff 0 max')
 
 
     arguments = parser.parse_args()
@@ -571,7 +571,7 @@ def __main__():
                              clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
                              rebuild=arguments.rebuild, action=arguments.action,
                              experiment_nums=exp_nums,
-                             diff1_max=int(arguments.diff1_max),diff0_max=int(arguments.diff0_max))
+                             diff1_max=int(arguments.diff1_max), diff0_max=int(arguments.diff0_max))
         else:
             tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
                              p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
@@ -579,7 +579,7 @@ def __main__():
                              clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
                              rebuild=arguments.rebuild, action=arguments.action,
                              experiment_nums=exp_nums, test_filename=test_filename,
-                             diff1_max=int(arguments.diff1_max),diff0_max=int(arguments.diff0_max))
+                             diff1_max=int(arguments.diff1_max), diff0_max=int(arguments.diff0_max))
 
     # clusters the vocabulary of a given file accoding to the w2v model constructed on the same file
     elif arguments.action == "cluster":
