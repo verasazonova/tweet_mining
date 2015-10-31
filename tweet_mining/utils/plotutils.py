@@ -113,11 +113,13 @@ def extract_xy_average(data, xind, yind, cind, cval):
     xvals = sorted(list(set(data_c[:, xind])))
     yvals = []
     yerr = []
+    n = []
     for xval in xvals:
         i = data_c[:, xind] == xval
         yvals.append(data_c[i, yind].mean())
         yerr.append(data_c[i, yind].std())
-    return np.array(xvals), np.array(yvals), np.array(yerr)
+        n.append(len(data_c[i, yind]))
+    return np.array(xvals), np.array(yvals), np.array(yerr), n
 
 
 def extract_data_series(data, xind, yind, cind, cval):
@@ -170,8 +172,8 @@ def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker='o', cdict=None
                 print "%-10s" % cval,
             print "%.4f +- %.4f" % (yvals.mean(), yvals.std())
         else:
-            xvals, yvals, yerrs = extract_xy_average(data, xind, yind, cind, cval)
-            print cval, xvals, yvals, yerrs
+            xvals, yvals, yerrs, n = extract_xy_average(data, xind, yind, cind, cval)
+            print cval, n, xvals, yvals, yerrs
         # if no color is supplied use black
         if cdict is None:
             color = 'k'
@@ -228,7 +230,7 @@ def make_labels(title=""):
     plt.ylabel("F-score for minority class")
     plt.ylim([0.64, 0.83])
     plt.title(title)
-    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=3, fancybox=True, shadow=True)
+    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.02), ncol=2, fancybox=True, shadow=True)
 
 
 def read_data(dataname, cind=2, cdict=None):
@@ -299,21 +301,32 @@ def plot_tweet_sentiment(dataname):
 
     data2, cdict, names2 = read_data("../2015-10-25-18-56/"+dataname, cind=4, cdict=cdict)
 
-    #data = np.concatenate([data, data2])
-    #names.update(names2)
+    data = np.concatenate([data, data2])
+    names.update(names2)
 
     print names
     markers = ['o', '<', 's']
-    for i, name in names.items():
-        plt.figure()
-        plt.gca().set_xscale("log", nonposx='clip')
-        plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='s', witherror=True, series=False,
-                                  conditions=[(2, i)],
-                                  labels={0.001: "0.1%", 0.01: "1%", 0.5: "50%", 0.1: "10%", 1: "100%"})
+    #for i, name in names.items():
+    plt.figure()
+    #plt.gca().set_xscale("log", nonposx='clip')
+    plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='o', witherror=True, series=False,
+                              conditions=[(2, 2)],
+                              labels={0.001: "0.1%% - %s" % names[2][3:],
+                                      0.01: "1%% - %s" % names[2][3:],
+                                      0.5: "50%% - %s" % names[2][3:],
+                                      0.1: "10%% - %s" % names[2][3:],
+                                      1: "100%% - %s" % names[2][3:]})
+    plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='x', witherror=True, series=False,
+                              conditions=[(2, 6)],
+                              labels={0.001: "0.1%% - %s" % names[6][3:],
+                                      0.01: "1%% - %s" % names[6][3:],
+                                      0.5: "50%% - %s" % names[6][3:],
+                                      0.1: "10%% - %s" % names[6][3:],
+                                      1: "100%% - %s" % names[6][3:]})
 
-        plt.grid()
-        make_labels("Tweet sentiment data %s" % name[3:])
-        plt.savefig(dataname + "_" + name + "_100_w2v.pdf")
+    plt.grid()
+    make_labels("Tweet sentiment data")
+    plt.savefig(dataname + "_100_w2v.pdf")
 
 
 
@@ -326,7 +339,6 @@ def plot_tweet_sentiment(dataname):
                                           0.5:"50%% - %i%% " % (100*t),
                                           0.1: "10%% - %i%% " % (100*t), 1: "100%% - %i%% " % (100*t)})
         labels = [name[3:] for name in sorted(names.values())]
-        plt.grid()
         plt.gca().set_xticks(range(1, len(labels)),)
         plt.gca().set_xticklabels(labels, rotation=45, ha='center')
         plt.gca().tick_params(axis='x', labelsize=8)
@@ -334,6 +346,7 @@ def plot_tweet_sentiment(dataname):
         plt.ylabel("Minority f-score")
         plt.title("Tweet sentiment data")
         plt.xlabel("Features")
+    plt.grid()
     plt.savefig(dataname + "_features" + "_100_w2v.pdf")
 
 
