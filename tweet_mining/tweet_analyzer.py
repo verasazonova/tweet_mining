@@ -221,6 +221,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                          unlabeled_filenames=None, clf_base="lr", action="classify", rebuild=False, min_count=1,
                          recluster_thresh=0, n_components=30, experiment_nums=None, test_filename=None):
 
+    experiment_name = "%s_%0.3f_%0.1f_%i" % (dataname, p, thresh, n_trial)
 
     start_time = time.time()
 
@@ -230,9 +231,9 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         clf = SVC(kernel='linear', C=1)
 
     w2v_data_name = dataname+"_w2v_data"
-    w2v_data_scaled_name = "%s_%i_%i_%i_scaled_w2v_data" % (dataname, size, window, min_count)
-    y_data_name = "%s_%i_%i_%i_y_data" % (dataname, size, window, min_count)
-    w2v_feature_crd_name = "%s_%i_%i_%i_w2v_f_crd" % (dataname, size, window, min_count)
+    w2v_data_scaled_name = "%s_%i_%i_%i_scaled_w2v_data" % (experiment_name, size, window, min_count)
+    y_data_name = "%s_%i_%i_%i_y_data" % (experiment_name, size, window, min_count)
+    w2v_feature_crd_name = "%s_%i_%i_%i_w2v_f_crd" % (experiment_name, size, window, min_count)
     ids = []
     x_data = []
 

@@ -36,7 +36,7 @@ def get_cmap(n_colors):
     RGB color.
     """
     color_norm = colors.Normalize(vmin=0, vmax=n_colors-1)
-    scalar_map = cmx.ScalarMappable(norm=color_norm, cmap='Set1')
+    scalar_map = cmx.ScalarMappable(norm=color_norm, cmap='Spectral')
 
     def map_index_to_rgb_color(index):
         return scalar_map.to_rgba(index)
@@ -226,12 +226,12 @@ def make_labels(title=""):
     plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
     plt.xlabel("Length of w2v corpus (labeled + unlabeled data)")
     plt.ylabel("F-score for minority class")
-    plt.ylim([0.64, 0.8])
+    plt.ylim([0.64, 0.83])
     plt.title(title)
     plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=3, fancybox=True, shadow=True)
 
 
-def read_data(dataname, cind=2):
+def read_data(dataname, cind=2, cdict=None):
     types = {}
     def convert_str_type(s):
         s1 = s.strip()
@@ -247,9 +247,10 @@ def read_data(dataname, cind=2):
     if isfile(name):
         data = np.loadtxt(name, delimiter=',', converters=converter)
         inv_types = dict([(v, k) for (k, v) in types.items()])
-        cvals = sorted(list(set(data[:, cind])))
+        if cdict is None:
+            cdict = {}
+        cvals = sorted(list(set(data[:, cind])) + cdict.keys())
         cmap = get_cmap(len(cvals))
-        cdict = {}
         for i, cval in enumerate(cvals):
             cdict[cval] = cmap(i)
         return data, cdict, inv_types
@@ -296,30 +297,40 @@ def plot_tweet_sentiment(dataname):
 
     data, cdict, names = read_data(dataname, cind=4)
 
+    data2, cdict, names2 = read_data("../2015-10-25-18-56/"+dataname, cind=4, cdict=cdict)
+
+    #data = np.concatenate([data, data2])
+    #names.update(names2)
+
     print names
     markers = ['o', '<', 's']
     for i, name in names.items():
         plt.figure()
+        plt.gca().set_xscale("log", nonposx='clip')
         plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='s', witherror=True, series=False,
                                   conditions=[(2, i)],
-                                  labels={0.001: "0.1%", 0.01: "1%", 0.1: "10%", 1: "100%"})
+                                  labels={0.001: "0.1%", 0.01: "1%", 0.5: "50%", 0.1: "10%", 1: "100%"})
 
         plt.grid()
         make_labels("Tweet sentiment data %s" % name[3:])
         plt.savefig(dataname + "_" + name + "_100_w2v.pdf")
 
 
+
+
     plt.figure()
     for i, t in enumerate([0, 0.1]):
-        plot_multiple_xy_averages(data, 2, 8, 4, cdict=cdict, marker=markers[i], witherror=False, series=False,
+        plot_multiple_xy_averages(data, 2, 8, 4, cdict=cdict, marker=markers[i], witherror=True, series=False,
                                   conditions=[(5, t)],
-                                  labels={0.001: "0.1 %% - %i %% " % (100*t), 0.01: "1%% - %i %%" % (t*100) })
+                                  labels={0.001: "0.1%% - %i%% " % (100*t), 0.01: "1%% - %i%%" % (t*100),
+                                          0.5:"50%% - %i%% " % (100*t),
+                                          0.1: "10%% - %i%% " % (100*t), 1: "100%% - %i%% " % (100*t)})
         labels = [name[3:] for name in sorted(names.values())]
         plt.grid()
         plt.gca().set_xticks(range(1, len(labels)),)
         plt.gca().set_xticklabels(labels, rotation=45, ha='center')
         plt.gca().tick_params(axis='x', labelsize=8)
-        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=3, fancybox=True, shadow=True)
+        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=2, fancybox=True, shadow=True)
         plt.ylabel("Minority f-score")
         plt.title("Tweet sentiment data")
         plt.xlabel("Features")
