@@ -230,9 +230,9 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         clf = SVC(kernel='linear', C=1)
 
     w2v_data_name = dataname+"_w2v_data"
-    w2v_data_scaled_name = dataname+"_scaled_w2v_data"
-    y_data_name = dataname+"_y_data"
-    w2v_feature_crd_name = dataname +"_w2v_f_crd"
+    w2v_data_scaled_name = "%s_%i_%i_%i_scaled_w2v_data" % (dataname, size, window, min_count)
+    y_data_name = "%s_%i_%i_%i_y_data" % (dataname, size, window, min_count)
+    w2v_feature_crd_name = "%s_%i_%i_%i_w2v_f_crd" % (dataname, size, window, min_count)
     ids = []
     x_data = []
 
@@ -499,7 +499,8 @@ def print_tweets(filename):
 
 def plot_scores(dataname):
 #    if dataname == "sentiment":
-    plotutils.plot_diff1_dep(dataname, withold=False)
+#    plotutils.plot_diff1_dep(dataname, withold=False)
+    plotutils.plot_tweet_sentiment(dataname)
 #    else:
 #        plotutils.plot_kenyan_data(dataname)
 

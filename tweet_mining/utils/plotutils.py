@@ -226,8 +226,9 @@ def make_labels(title=""):
     plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
     plt.xlabel("Length of w2v corpus (labeled + unlabeled data)")
     plt.ylabel("F-score for minority class")
+    plt.ylim([0.64, 0.8])
     plt.title(title)
-    plt.legend(loc='lower center', bbox_to_anchor=(0.5, -0.1), ncol=3, fancybox=True, shadow=True)
+    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=3, fancybox=True, shadow=True)
 
 
 def read_data(dataname, cind=2):
@@ -293,63 +294,37 @@ def plot_diff1_dep(dataname, withold=False):
 
 def plot_tweet_sentiment(dataname):
 
-    #TYPES = {'0_avg': 0, '1_std': 1, '2_diff0_1':2, '3_diff0_2':3, '4_diff0_3':4,
-    #         '5_diff1_1':5, '6_diff1_2':6, '7_diff1_3':7, 'cluster':8}
-    types = {}
-    def convert_str_type(s):
-        if s in types.keys():
-            return types[s]
-        else:
-            types[s] += len(types) + 1
+    data, cdict, names = read_data(dataname, cind=4)
 
-    converter = {2: convert_str_type}
-
-    inv_types = dict([(v, k) for (k, v) in types.items()])
-    inv_types[8]= 'cluster'
-    print inv_types
-
-    #data_bow = np.loadtxt("../bow_f-scores-100-10.txt")
-
-    data_lr = {}
-    ps = [0.001, 0.01, 0.1]
-    for p in ps:
-        name = dataname+"_"+str(p).replace("0.", "") + "_lr_fscore.txt"
-        if isfile(name):
-            data_lr[p] = np.loadtxt(name, delimiter=',', converters=converter)
-
-    cvals = sorted(types.values())
-    cmap = get_cmap(len(cvals))
-    cdict = {}
-    for i, cval in enumerate(cvals):
-        cdict[cval] = cmap(i)
-
+    print names
     markers = ['o', '<', 's']
-    #for p, marker in zip(ps, markers):
-    #    if p in data_lr:
-    #        # add length of labeled data to the unlabeled data
-    #        data_lr[p][:, 7] += data_lr[p][:, 6]
-    #        for cval in [types['0_avg'], types['1_std'], types['4_diff0_3'], types['7_diff1_3'], types['cluster']]:
-    #            plot_multiple_xy_averages(data_lr[p], 7, 8, 2, cdict=cdict, witherror=False, series=False,
-    #                                  labels=inv_types, conditions=[(2, cval)], marker=marker)
+    for i, name in names.items():
+        plt.figure()
+        plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='s', witherror=True, series=False,
+                                  conditions=[(2, i)],
+                                  labels={0.001: "0.1%", 0.01: "1%", 0.1: "10%", 1: "100%"})
 
-    #plot_multiple_bases(data_bow, 2, 3, 1, cdict='k')
-    #make_labels("All features")
-    #plt.savefig(dataname + "_w2v.pdf")
+        plt.grid()
+        make_labels("Tweet sentiment data %s" % name[3:])
+        plt.savefig(dataname + "_" + name + "_100_w2v.pdf")
+
 
     plt.figure()
-    labels = {}
-    for p, marker in zip(ps, markers):
-        if p in data_lr:
-            # add length of labeled data to the unlabeled data
-            data_lr[p][:, 7] += data_lr[p][:, 6]
-            for cval in [types['0_avg'], types['1_std']]:
-                labels[cval] = "%s_%0.3f" % (inv_types[cval], p)
-                plot_multiple_xy_averages(data_lr[p], 7, 8, 2, cdict=cdict, witherror=False, series=False,
-                                      labels=labels, conditions=[(2, cval)], marker=marker)
+    for i, t in enumerate([0, 0.1]):
+        plot_multiple_xy_averages(data, 2, 8, 4, cdict=cdict, marker=markers[i], witherror=False, series=False,
+                                  conditions=[(5, t)],
+                                  labels={0.001: "0.1 %% - %i %% " % (100*t), 0.01: "1%% - %i %%" % (t*100) })
+        labels = [name[3:] for name in sorted(names.values())]
+        plt.grid()
+        plt.gca().set_xticks(range(1, len(labels)),)
+        plt.gca().set_xticklabels(labels, rotation=45, ha='center')
+        plt.gca().tick_params(axis='x', labelsize=8)
+        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=3, fancybox=True, shadow=True)
+        plt.ylabel("Minority f-score")
+        plt.title("Tweet sentiment data")
+        plt.xlabel("Features")
+    plt.savefig(dataname + "_features" + "_100_w2v.pdf")
 
-    #plot_multiple_bases(data_bow, 2, 3, 1, cdict='k')
-    make_labels("Tweet sentiment dataset.")
-    plt.savefig(dataname + "_100_w2v.pdf")
 
 
 def plot_kenyan_data(dataname):
