@@ -96,6 +96,7 @@ def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
         n_batches = int(train_end/batch_size)
         all_classes = np.unique(y)
         print "Learning by batches: %i " % n_batches
+        logging.info("Learning by batches: %i " % n_batches )
 
         # cycle over the data 5 times, shuffling the order of training
         for r in range(5):
@@ -315,6 +316,8 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         w2v_feature_crd = pickle.load(open(w2v_feature_crd_name, 'rb'))
         print "Loaded feature crd %s" % w2v_feature_crd
         train_data_end = int(p*1600000)
+        logging.info("Loaded data, features.  %s " % w2v_data.shape)
+
 
 
     names, experiments = build_experiments(w2v_feature_crd, experiment_nums=experiment_nums)
@@ -329,6 +332,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         for name, experiment in zip(names, experiments):
             print("%s s: " % (time.time() - start_time))
             print name, experiment
+            logging.info("Experiment %s %s" % (name, experiment))
             #inds = []
             #for start, stop in experiment:
             #    inds += (range(start, stop))
