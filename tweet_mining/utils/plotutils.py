@@ -312,7 +312,7 @@ def plot_tweet_sentiment(dataname):
     for t in [1, 2, 5, 9]:
         plt.figure()
     #plt.gca().set_xscale("log", nonposx='clip')
-        plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='o', witherror=True, series=False,
+        plot_multiple_xy_averages(data, 7, 11, 4, cdict=cdict, marker='o', witherror=True, series=False,
                                   conditions=[(2, t)],
                                   labels={0.001: "0.1%% - %s" % names[t][3:],
                                           0.01: "1%% - %s" % names[t][3:],
@@ -329,7 +329,7 @@ def plot_tweet_sentiment(dataname):
 
     plt.figure()
     for i, t in enumerate([0, 0.3]):
-        plot_multiple_xy_averages(data, 2, 8, 4, cdict=cdict, marker=markers[i], witherror=True, series=False,
+        plot_multiple_xy_averages(data, 2, 11, 4, cdict=cdict, marker=markers[i], witherror=True, series=False,
                                   conditions=[(5, t)],
                                   labels={0.001: "0.1%% - %i%% " % (100*t), 0.01: "1%% - %i%%" % (t*100),
                                           0.5:"50%% - %i%% " % (100*t),
@@ -343,19 +343,19 @@ def plot_tweet_sentiment(dataname):
         plt.title("Tweet sentiment data")
         plt.xlabel("Features")
     plt.grid()
-    plt.savefig(dataname + "_features" + "_100_w2v.pdf")
+    plt.savefig(dataname + "_features" + "_w2v.pdf")
 
     data, cdict, names = read_data(dataname, cind=2)
     data[:,4] *= 100
     plt.figure()
-    plot_multiple_xy_averages(data, 4, 8, 2, cdict=cdict, marker='s', witherror=True, series=False,
+    plot_multiple_xy_averages(data, 4, 11, 2, cdict=cdict, marker='s', witherror=True, series=False,
                           conditions=[(5, 1)], labels=names)
     plt.ylabel("Minority f-score")
     plt.title("Tweet sentiment data")
     plt.xlabel("Percentage of labelled data")
     plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=2, fancybox=True, shadow=True)
     plt.grid()
-    plt.savefig( "%s_full_trained_100_w2v.pdf" % (dataname))
+    plt.savefig( "%s_full_trained_w2v.pdf" % (dataname))
 
 
 def plot_kenyan_data(dataname):

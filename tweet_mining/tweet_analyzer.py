@@ -92,7 +92,7 @@ def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
     # if not, go by batches.
 
     else:
-        batch_size = 100000
+        batch_size = 20000
         n_batches = int(train_end/batch_size)
         all_classes = np.unique(y)
         print "Learning by batches: %i " % n_batches
