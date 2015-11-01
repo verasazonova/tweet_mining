@@ -316,7 +316,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         w2v_feature_crd = pickle.load(open(w2v_feature_crd_name, 'rb'))
         print "Loaded feature crd %s" % w2v_feature_crd
         train_data_end = int(p*1600000)
-        logging.info("Loaded data, features.  %s " % w2v_data.shape)
+        logging.info("Loaded data, features.  %s " %  str(w2v_data.shape))
 
 
 
@@ -332,7 +332,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         for name, experiment in zip(names, experiments):
             print("%s s: " % (time.time() - start_time))
             print name, experiment
-            logging.info("Experiment %s %s" % (name, experiment))
+            logging.info("Experiment %s %s" % (name, str(experiment)))
             #inds = []
             #for start, stop in experiment:
             #    inds += (range(start, stop))
