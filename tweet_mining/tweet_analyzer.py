@@ -84,7 +84,31 @@ def run_grid_search(x, y, clf=None, parameters=None, fit_parameters=None):
 def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
     #print x_train.shape, y_train.shape, x_test.shape, y_test.shape
     scores = np.zeros((1, 4))
-    clf.fit(csr_matrix(x[0:train_end, start:stop]), y[0:train_end])
+    MAX = 100000
+    # if we can fit the whole array in memory.
+
+    if train_end < MAX:
+        clf.fit(csr_matrix(x[0:train_end, start:stop]), y[0:train_end])
+    # if not, go by batches.
+
+    else:
+        batch_size = 100000
+        n_batches = int(train_end/batch_size)
+        all_classes = np.unique(y)
+        print "Learning by batches: %i " % n_batches
+
+        # cycle over the data 5 times, shuffling the order of training
+        for r in range(5):
+            inds = shuffle(range(train_end), random_state=r)
+            for i in range(n_batches):
+                batch_inds = inds[i*batch_size:(i+1)*batch_size]
+                clf.partial_fit(csr_matrix(x[batch_inds, start:stop]), y[batch_inds], classes=all_classes)
+
+            # last batch
+            batch_inds = inds[n_batches*batch_size:]
+            if batch_inds:
+                clf.partial_fit(csr_matrix(x[batch_inds, start:stop]), y[batch_inds], classes=all_classes)
+
     predictions = clf.predict(csr_matrix(x[train_end:, start:stop]))
     for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score,
                               sklearn.metrics.recall_score, sklearn.metrics.f1_score]):
@@ -226,10 +250,6 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
     start_time = time.time()
 
-    if clf_base == "lr":
-        clf = sklearn.linear_model.SGDClassifier(loss='log', penalty="l2",alpha=0.005, n_iter=5)
-    else:
-        clf = SVC(kernel='linear', C=1)
 
     w2v_data_name = dataname+"_w2v_data"
     w2v_data_scaled_name = "%s_%i_%i_%i_scaled_w2v_data" % (experiment_name, size, window, min_count)
@@ -316,6 +336,11 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
             start = experiment[0][0]
             stop = experiment[0][1]
 
+            if clf_base == "lr":
+                clf = sklearn.linear_model.SGDClassifier(loss='log', penalty="l2",alpha=0.005, n_iter=5, shuffle=True)
+            else:
+                clf = SVC(kernel='linear', C=1)
+
             if action == "classify":
 
                 if test_filename is not None:
@@ -329,7 +354,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
                 for i, score in enumerate(scores):
                     f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i \n" %
-                           (n_trial, i, name, size, p, thresh, w2v_data.shape[0], w2v_data.shape[0]/p*(p+thresh),
+                           (n_trial, i, name, size, p, thresh, w2v_data.shape[0], w2v_data.shape[0]*(p+thresh-p+thresh),
                             score[0], score[1], score[2], score[3], n_components))
                 f.flush()
 

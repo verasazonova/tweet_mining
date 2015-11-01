@@ -299,6 +299,9 @@ def plot_tweet_sentiment(dataname):
 
     data, cdict, names = read_data(dataname, cind=4)
 
+
+    data[:, 7] = 1600359 * (data[:, 4] + data[:, 5] - data[:, 4] * data[:, 5])
+
     #data2, cdict, names2 = read_data("../2015-10-25-18-56/"+dataname, cind=4, cdict=cdict)
 
     #data = np.concatenate([data, data2])
@@ -306,33 +309,26 @@ def plot_tweet_sentiment(dataname):
 
     print names
     markers = ['o', '<', 's']
-    #for i, name in names.items():
-    plt.figure()
+    for t in [1, 2, 5, 9]:
+        plt.figure()
     #plt.gca().set_xscale("log", nonposx='clip')
-    plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='o', witherror=True, series=False,
-                              conditions=[(2, 2)],
-                              labels={0.001: "0.1%% - %s" % names[2][3:],
-                                      0.01: "1%% - %s" % names[2][3:],
-                                      0.5: "50%% - %s" % names[2][3:],
-                                      0.1: "10%% - %s" % names[2][3:],
-                                      1: "100%% - %s" % names[2][3:]})
-    plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='x', witherror=True, series=False,
-                              conditions=[(2, 9)],
-                              labels={0.001: "0.1%% - %s" % names[9][3:],
-                                      0.01: "1%% - %s" % names[9][3:],
-                                      0.5: "50%% - %s" % names[9][3:],
-                                      0.1: "10%% - %s" % names[9][3:],
-                                      1: "100%% - %s" % names[9][3:]})
+        plot_multiple_xy_averages(data, 7, 8, 4, cdict=cdict, marker='o', witherror=True, series=False,
+                                  conditions=[(2, t)],
+                                  labels={0.001: "0.1%% - %s" % names[t][3:],
+                                          0.01: "1%% - %s" % names[t][3:],
+                                          0.5: "50%% - %s" % names[t][3:],
+                                          0.1: "10%% - %s" % names[t][3:],
+                                          1: "100%% - %s" % names[t][3:]})
 
-    plt.grid()
-    make_labels("Tweet sentiment data")
-    plt.savefig(dataname + "_100_w2v.pdf")
+        plt.grid()
+        make_labels("Tweet sentiment data %s" % names[t][3:])
+        plt.savefig("%s_%i_100_w2v.pdf" % (dataname, t))
 
 
 
 
     plt.figure()
-    for i, t in enumerate([0, 0.1]):
+    for i, t in enumerate([0, 0.3]):
         plot_multiple_xy_averages(data, 2, 8, 4, cdict=cdict, marker=markers[i], witherror=True, series=False,
                                   conditions=[(5, t)],
                                   labels={0.001: "0.1%% - %i%% " % (100*t), 0.01: "1%% - %i%%" % (t*100),
@@ -349,6 +345,17 @@ def plot_tweet_sentiment(dataname):
     plt.grid()
     plt.savefig(dataname + "_features" + "_100_w2v.pdf")
 
+    data, cdict, names = read_data(dataname, cind=2)
+    data[:,4] *= 100
+    plt.figure()
+    plot_multiple_xy_averages(data, 4, 8, 2, cdict=cdict, marker='s', witherror=True, series=False,
+                          conditions=[(5, 1)], labels=names)
+    plt.ylabel("Minority f-score")
+    plt.title("Tweet sentiment data")
+    plt.xlabel("Percentage of labelled data")
+    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=2, fancybox=True, shadow=True)
+    plt.grid()
+    plt.savefig( "%s_full_trained_100_w2v.pdf" % (dataname))
 
 
 def plot_kenyan_data(dataname):
