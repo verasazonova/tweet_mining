@@ -189,7 +189,7 @@ def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker='o', cdict=None
         else:
             label = cval
         if witherror:
-            plt.errorbar(xvals, yvals, yerr=yerrs, fmt='-', marker=marker, color=color, label=label)
+            plt.errorbar(xvals, yvals, yerr=yerrs, fmt='-', marker=marker, color=color, label=label, elinewidth=0.5)
         else:
             plt.plot(xvals, yvals, '-', marker=marker, color=color, label=label)
 
@@ -227,10 +227,11 @@ def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None,
 def make_labels(title=""):
     plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
     plt.xlabel("Length of w2v corpus (labeled + unlabeled data)")
-    plt.ylabel("F-score for minority class")
-    plt.ylim([0.64, 0.83])
+    plt.ylabel("Accuracy")
+    plt.ylim([0.66, 0.79])
+    plt.xlim([-1e5, 1.8e6])
     plt.title(title)
-    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.02), ncol=2, fancybox=True, shadow=True)
+    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.02), ncol=3, fancybox=True, shadow=True)
 
 
 def read_data(dataname, cind=2, cdict=None):
@@ -299,6 +300,7 @@ def plot_tweet_sentiment(dataname):
 
     data, cdict, names = read_data(dataname, cind=4)
 
+    y_ind = 8
 
     data[:, 7] = 1600359 * (data[:, 4] + data[:, 5] - data[:, 4] * data[:, 5])
 
@@ -312,13 +314,14 @@ def plot_tweet_sentiment(dataname):
     for t in [1, 2, 5, 9]:
         plt.figure()
     #plt.gca().set_xscale("log", nonposx='clip')
-        plot_multiple_xy_averages(data, 7, 11, 4, cdict=cdict, marker='o', witherror=True, series=False,
-                                  conditions=[(2, t)],
-                                  labels={0.001: "0.1%% - %s" % names[t][3:],
-                                          0.01: "1%% - %s" % names[t][3:],
-                                          0.5: "50%% - %s" % names[t][3:],
-                                          0.1: "10%% - %s" % names[t][3:],
-                                          1: "100%% - %s" % names[t][3:]})
+        for j in [0.001, 0.01, 0.1]:
+            plot_multiple_xy_averages(data, 7, y_ind, 4, cdict=cdict, marker='o', witherror=False, series=False,
+                                      conditions=[(2, t), (4, j)],
+                                      labels={0.001: "0.1%% - %s" % names[t][3:],
+                                              0.01: "1%% - %s" % names[t][3:],
+                                              0.5: "50%% - %s" % names[t][3:],
+                                              0.1: "10%% - %s" % names[t][3:],
+                                              1: "100%% - %s" % names[t][3:]})
 
         plt.grid()
         make_labels("Tweet sentiment data %s" % names[t][3:])
@@ -328,8 +331,8 @@ def plot_tweet_sentiment(dataname):
 
 
     plt.figure()
-    for i, t in enumerate([0, 0.3]):
-        plot_multiple_xy_averages(data, 2, 11, 4, cdict=cdict, marker=markers[i], witherror=True, series=False,
+    for i, t in enumerate([0, 1]):
+        plot_multiple_xy_averages(data, 2, y_ind, 4, cdict=cdict, marker=markers[i], witherror=True, series=False,
                                   conditions=[(5, t)],
                                   labels={0.001: "0.1%% - %i%% " % (100*t), 0.01: "1%% - %i%%" % (t*100),
                                           0.5:"50%% - %i%% " % (100*t),
@@ -338,8 +341,8 @@ def plot_tweet_sentiment(dataname):
         plt.gca().set_xticks(range(1, len(labels)),)
         plt.gca().set_xticklabels(labels, rotation=45, ha='center')
         plt.gca().tick_params(axis='x', labelsize=8)
-        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=2, fancybox=True, shadow=True)
-        plt.ylabel("Minority f-score")
+        plt.legend(loc='lower center', bbox_to_anchor=(0.5, -0.1), ncol=2, fancybox=True, shadow=True)
+        plt.ylabel("Accuracy")
         plt.title("Tweet sentiment data")
         plt.xlabel("Features")
     plt.grid()
@@ -348,12 +351,13 @@ def plot_tweet_sentiment(dataname):
     data, cdict, names = read_data(dataname, cind=2)
     data[:,4] *= 100
     plt.figure()
-    plot_multiple_xy_averages(data, 4, 11, 2, cdict=cdict, marker='s', witherror=True, series=False,
+    plot_multiple_xy_averages(data, 4, y_ind, 2, cdict=cdict, marker='s', witherror=True, series=False,
                           conditions=[(5, 1)], labels=names)
-    plt.ylabel("Minority f-score")
+    plt.ylabel("Accuracy")
     plt.title("Tweet sentiment data")
-    plt.xlabel("Percentage of labelled data")
-    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0.1), ncol=2, fancybox=True, shadow=True)
+    plt.xlabel("Labelled data size (% of total)")
+    plt.xlim([-5, 105])
+    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0), ncol=2, fancybox=True, shadow=True)
     plt.grid()
     plt.savefig( "%s_full_trained_w2v.pdf" % (dataname))
 

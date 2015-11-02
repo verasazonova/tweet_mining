@@ -92,7 +92,7 @@ def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
     # if not, go by batches.
 
     else:
-        batch_size = 20000
+        batch_size = 10000
         n_batches = int(train_end/batch_size)
         all_classes = np.unique(y)
         print "Learning by batches: %i " % n_batches
@@ -102,6 +102,7 @@ def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
         for r in range(5):
             inds = shuffle(range(train_end), random_state=r)
             for i in range(n_batches):
+                logging.info("Run  %i %i " % (r, i))
                 batch_inds = inds[i*batch_size:(i+1)*batch_size]
                 clf.partial_fit(csr_matrix(x[batch_inds, start:stop]), y[batch_inds], classes=all_classes)
 
