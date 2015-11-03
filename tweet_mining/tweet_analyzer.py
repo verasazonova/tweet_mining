@@ -278,7 +278,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         #                                                                      n_trial=n_trial, dataname=dataname)
 
         # should make this into a separate process to release memory afterwards
-        w2v_data, w2v_feature_crd = build_and_vectorize_w2v(x_data=x_data,y_data=y_data,
+        w2v_data, w2v_feature_crd = build_and_vectorize_w2v(x_data=x_data, y_data=y_data,
                                                               unlabeled_data=unlabeled_data, window=window,
                                                               size=size, dataname=run_dataname,
                                                               rebuild=rebuild,action=action,
@@ -373,7 +373,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                 ioutils.save_liblinear_format_data (dataname + name+"_libl.txt", w2v_data[:, start:stop], y_data)
 
 
-def build_w2v_model(w2v_corpus, dataname="", window=0, size=0, min_count=0, rebuild=False, explore=False):
+def build_w2v_model(w2v_corpus_list, dataname="", window=0, size=0, min_count=0, rebuild=False, explore=False):
     w2v_model_name = w2v_models.make_w2v_model_name(dataname=dataname, size=size, window=window,
                                                     min_count=min_count)
     logging.info("Looking for model %s" % w2v_model_name)
@@ -381,6 +381,7 @@ def build_w2v_model(w2v_corpus, dataname="", window=0, size=0, min_count=0, rebu
         w2v_model = w2v_models.load_w2v(w2v_model_name)
         logging.info("Model Loaded")
     else:
+        w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in np.concatenate(w2v_corpus_list)])
         w2v_model = w2v_models.build_word2vec(w2v_corpus, size=size, window=window, min_count=min_count, dataname=dataname)
         logging.info("Model created")
     w2v_model.init_sims(replace=True)
@@ -412,7 +413,7 @@ def build_and_vectorize_w2v(x_data=None, y_data=None, unlabeled_data=None, windo
                         rebuild=False, action="classify", stoplist=None, min_count=1,
                         diff1_max=3, diff0_max=1):
 
-    w2v_corpus = np.array([tu.normalize_punctuation(text).split() for text in np.concatenate([x_data, unlabeled_data])])
+    w2v_corpus = [x_data, unlabeled_data]
     if action == "explore":
         explore = True
     else:
@@ -457,12 +458,11 @@ def build_and_vectorize_dpgmm(x_data=None, y_data=None, unlabeled_data=None, dat
 
 def scale_features(data, feature_crd):
     # scale features
-    for name, (start, end) in feature_crd.items():
-        data[:, start:end] = StandardScaler().fit_transform(data[:, start:end])
+#    for name, (start, end) in feature_crd.items():
+#        data[:, start:end] = StandardScaler().fit_transform(data[:, start:end])
 
-
+    data = StandardScaler(copy=False).fit_transform(data)
     print "scaled"
-
     return data
 
 # experiment_nums = is a list of feature #s to add to experiments.

@@ -10,6 +10,7 @@ from sklearn.mixture import DPGMM
 from sklearn.preprocessing import StandardScaler
 from gensim import corpora, models, matutils
 import re
+import gc
 from sklearn.cluster import DBSCAN
 import w2v_models
 from six import string_types
@@ -57,6 +58,7 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
         self.diffmax0 = diffmax0
         self.diffmax1 = diffmax1
         self.feature_crd = {}
+        self.length = 0
 
         self.no_dictionary = False
         logging.info("W2v based text classifier with model %s " % (self.w2v_model))
@@ -108,6 +110,8 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
             val = (start, start + l)
             self.feature_crd[name] = val
             start += l
+        self.length = start
+        logging.info("Total feature length %i " % self.length )
         logging.info("W2V: got a model %s " % (self.w2v_model,))
         return self
 
@@ -151,28 +155,47 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
         return vec.reshape((1, len(vec)))
 
 
+    def pre_process(self, text):
+        if self.no_dictionary:
+            x_processed = tu.normalize_punctuation(text).split()
+        else:
+            x_processed = [word for word in tu.normalize_punctuation(text).split()
+                           if word in self.dictionary.token2id and word not in self.stoplist]
+
+        return x_processed
+
+
     # X is an array of sentences (texts)
     # Pre-process, filter frequent and rare words, and return an array of dictionary of different feature vectors
     def transform(self, X):
 
         # Text pre-processing
-        x_clean = [tu.normalize_punctuation(text).split() for text in X]
-        logging.info("Text prepocessed")
+        #x_clean = [tu.normalize_punctuation(text).split() for text in X]
+        #logging.info("Text prepocessed")
 
         # Text processing: remove words outside the dictionary frequency boundaries
         # To check whether word is in the dictionary need to convert it to id first!!!!
-        if self.no_dictionary:
-            x_processed = x_clean
-        else:
-            x_processed = [[word for word in text if word in self.dictionary.token2id and word not in self.stoplist]
-                            for text in x_clean]
+        #if self.no_dictionary:
+        #    x_processed = x_clean
+        #else:
+        #    x_processed = [[word for word in text if word in self.dictionary.token2id and word not in self.stoplist]
+        #                    for text in x_clean]
 
         # Vectorize using W2V model
+
+
         if self.w2v_model is not None:
-            logging.info("W2V: ectorizing a corpus")
+            logging.info("W2V: vectorizing a corpus")
+            vecs = np.memmap('vectors.dat', dtype='float32', mode='w+', shape=(len(X), self.length))
+#            vecs =  np.zeros((len(X), self.length))
             size = self.w2v_model.layer1_size
             if len(X) > 0:
-                vecs = np.concatenate([self.vectorize_text(z) for z in x_processed])
+                for i, text in enumerate(X):
+                    vec = self.vectorize_text(self.pre_process(text))
+                    vecs[i, :] = vec
+                    if i % 1000 == 0 :
+                        gc.collect()
+                        logging.info("Processeed %i texts" % i)
             else:
                 vecs = np.zeros(size).reshape((1, size))
             logging.info("W2V Text Model: returning pre-processed data of shape %s" % (vecs.shape, ))
