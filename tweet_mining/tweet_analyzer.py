@@ -84,7 +84,7 @@ def run_grid_search(x, y, clf=None, parameters=None, fit_parameters=None):
 def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
     #print x_train.shape, y_train.shape, x_test.shape, y_test.shape
     scores = np.zeros((1, 4))
-    MAX = 100000
+    MAX = 2e6
     # if we can fit the whole array in memory.
 
     if train_end < MAX:

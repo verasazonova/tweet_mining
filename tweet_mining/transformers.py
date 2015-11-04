@@ -186,8 +186,8 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
 
         if self.w2v_model is not None:
             logging.info("W2V: vectorizing a corpus")
-            vecs = np.memmap('vectors.dat', dtype='float32', mode='w+', shape=(len(X), self.length))
-#            vecs =  np.zeros((len(X), self.length))
+            #vecs = np.memmap('vectors.dat', dtype='float32', mode='w+', shape=(len(X), self.length))
+            vecs =  np.zeros((len(X), self.length))
             size = self.w2v_model.layer1_size
             if len(X) > 0:
                 for i, text in enumerate(X):
