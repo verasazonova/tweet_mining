@@ -138,8 +138,8 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
         #predictions = cross_validation.cross_val_predict(clf, x_shuffled, y=y_shuffled, cv=skf, n_jobs=1, verbose=2)
         n_fold = 0
         for train_ind, test_ind in skf:
-            clf.fit(x_shuffled[train_ind], y_shuffled[train_ind])
-            predictions = clf.predict(y_shuffled[test_ind])
+            clf.fit(x_shuffled[train_ind, :], y_shuffled[train_ind])
+            predictions = clf.predict(x_shuffled[test_ind, :])
             for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score   ,
                                         sklearn.metrics.recall_score, sklearn.metrics.f1_score]):#
 
