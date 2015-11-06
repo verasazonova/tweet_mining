@@ -128,19 +128,22 @@ def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
 
         x_shuffled, y_shuffled = shuffle(x, y, random_state=n)
         skf = cross_validation.StratifiedKFold(y_shuffled, n_folds=n_cv)  # random_state=n, shuffle=True)
-        #score_names = ['accuracy', 'f1', 'precision', 'recall']
-        #metrics = {score: cross_validation.cross_val_score(dt,x_data_tfidf.toarray(), target_arr, cv=cv,scoring=score) for score in scores}
-#            sc = cross_validation.cross_val_score(clf, x_shuffled, y=y_shuffled, cv=skf,
-#                                              scoring=scoring_name,
-#                                              fit_params=fit_parameters,
-#                                              verbose=2, n_jobs=1)
-        predictions = cross_validation.cross_val_predict(clf, x_shuffled, y=y_shuffled, cv=skf, n_jobs=1, verbose=2)
+        #score_names = ['accuracy', 'precision', 'recall',  'f1']
+        #for i, scoring_name in enumerate(score_names):
+        #    sc = cross_validation.cross_val_score(clf, x_shuffled, y=y_shuffled, cv=skf,
+        #                                          scoring=scoring_name,
+        #                                          fit_params=fit_parameters,
+        #                                          verbose=2, n_jobs=1)
+        #    scores[n * n_cv: n*n_cv + n_cv, i] = sc
+        #predictions = cross_validation.cross_val_predict(clf, x_shuffled, y=y_shuffled, cv=skf, n_jobs=1, verbose=2)
         n_fold = 0
-        for _, test_ind in skf:
+        for train_ind, test_ind in skf:
+            clf.fit(x_shuffled[train_ind])
+            predictions = clf.predict(y_shuffled[test_ind])
             for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score   ,
-                                        sklearn.metrics.recall_score, sklearn.metrics.f1_score]):
+                                        sklearn.metrics.recall_score, sklearn.metrics.f1_score]):#
 
-                sc = metr(y_shuffled[test_ind], predictions[test_ind])
+                sc = metr(y_shuffled[test_ind], predictions)
                 scores[n * n_cv + n_fold, i] = sc
             n_fold += 1
     #print scores, scores.mean(), scores.std()
@@ -287,16 +290,18 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
 
         # scale
         print "Vectorized.  Saving"
-
+        logging.info("Vectorized. Saving")
         np.save(w2v_data_name, np.ascontiguousarray(w2v_data))
 
         pickle.dump(w2v_feature_crd, open(w2v_feature_crd_name, 'wb'))
 
+        logging.info("Scaling")
         print "Scaling"
 
         w2v_data = scale_features(w2v_data, w2v_feature_crd)
         #dpgmm_data = scale_features(dpgmm_data, dpgmm_feature_crd)
         print "Scaled. Saving"
+        logging.info("Scaled. Saving")
 
         if os.path.isfile(w2v_data_name+".npy"):
             os.remove(w2v_data_name+".npy")
@@ -304,6 +309,7 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
         np.save(y_data_name, np.ascontiguousarray(y_data))
 
         print "Building experiments"
+        logging.info("Building experiments")
 
     else:
 
@@ -328,6 +334,9 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
     print experiments
     print action
     print train_data_end, w2v_data.shape
+
+    logging.info("Built experiments: %s" % str(names))
+    logging.info("Proceeding with %s %i %s"  % (action, train_data_end, str(w2v_data.shape)))
 
     with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
         for name, experiment in zip(names, experiments):

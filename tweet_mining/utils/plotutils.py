@@ -338,7 +338,7 @@ def plot_tweet_sentiment(dataname):
             plt.xlabel("W2v corpus length")
             plt.ylabel("Precision and Recall")
             plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
-            plt.ylim([0.62, 0.85])
+            plt.ylim([0.62, 0.9])
             plt.xlim([-1e5, 1.8e6])
             plt.grid()
             plt.savefig("%s_%i_%i_w2v.pdf" % (dataname, size, t))
@@ -369,22 +369,27 @@ def plot_tweet_sentiment(dataname):
         plt.ylabel("Precision and recall")
         plt.title("Tweet sentiment data for %i%%" % (p*100))
         plt.xlabel("Features")
-        plt.ylim([0.65, 0.85])
+        plt.ylim([0.65, 0.9])
         plt.grid()
         plt.savefig("%s_%0.1f_features_w2v.pdf" % (dataname, p))
 
     data, cdict, names = read_data(dataname, cind=2)
     data[:,4] *= 100
-    plt.figure()
-    plot_multiple_xy_averages(data, 4, y_ind, 2, cdict=cdict, marker='s', witherror=True, series=False,
-                          conditions=[(5, 1), (3, size)], labels=names)
-    plt.ylabel("F-score")
-    plt.title("Tweet sentiment data")
-    plt.xlabel("Labelled data size (% of total)")
-    plt.xlim([-5, 105])
-    plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0), ncol=2, fancybox=True, shadow=True)
-    plt.grid()
-    plt.savefig( "%s_full_trained_w2v.pdf" % (dataname))
+    for i in range(data.shape[0]):
+        if data[i, 4] == 100:
+            data[i, 5] = 1
+
+    for size in [100,300, 500]:
+        plt.figure()
+        plot_multiple_xy_averages(data, 4, y_ind, 2, cdict=cdict, marker='s', witherror=True, series=False,
+                              conditions=[(5, 1), (3, size)], labels=names)
+        plt.ylabel("F-score")
+        plt.title("Tweet sentiment data %i " % size)
+        plt.xlabel("Labelled data size (% of total)")
+        plt.xlim([-5, 105])
+        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0), ncol=2, fancybox=True, shadow=True)
+        plt.grid()
+        plt.savefig( "%s_full_trained_%i_w2v.pdf" % (dataname, size))
 
 
 def plot_kenyan_data(dataname):
