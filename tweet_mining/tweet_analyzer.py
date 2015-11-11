@@ -246,6 +246,36 @@ def read_and_split_data(filename, p=1, thresh=0, n_trial=0, unlabeled_filenames=
     return x_labeled, y_labeled, x_unlabeled_for_w2v, experiment_name, stoplist, ids_l
 
 
+def tweet_bow_classification(filename, dataname, n_trial=None,  p=None, thresh=None,
+                             clf_name='bow', clf_base="lr", action="classify"):
+    x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
+                                                                                  n_trial=n_trial, dataname=dataname)
+
+    bow = transformers.BOWModel(no_above=0.9, no_below=2, stoplist=stoplist)
+
+    # get matrices of features from x_data
+    data = bow.fit_transform(x_data)
+
+    if clf_base == "lr":
+        clf = sklearn.linear_model.SGDClassifier(loss='log', penalty="l2",alpha=0.005, n_iter=5, shuffle=True)
+    else:
+        clf = SVC(kernel='linear', C=1)
+
+    name="BOW"
+    if action == "classify":
+
+        scores = run_cv_classifier(data, y_data, clf=clf, n_trials=1, n_cv=5)
+        print name, scores, scores.shape
+
+        with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
+
+            for i, score in enumerate(scores):
+                f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i \n" %
+                       (n_trial, i, name, -1, p, thresh, data.shape[0], data.shape[0]*(p+thresh-p+thresh),
+                        score[0], score[1], score[2], score[3], -1))
+            f.flush()
+
+
 def tweet_classification(filename, size, window, dataname, p=None, thresh=None, n_trial=None, clf_name='w2v',
                          unlabeled_filenames=None, clf_base="lr", action="classify", rebuild=False, min_count=1,
                          recluster_thresh=0, n_components=30, experiment_nums=None, test_filename=None,
@@ -543,11 +573,11 @@ def print_tweets(filename):
 
 
 def plot_scores(dataname):
-#    if dataname == "sentiment":
+    if dataname == "sentiment_cv":
 #    plotutils.plot_diff1_dep(dataname, withold=False)
-    plotutils.plot_tweet_sentiment(dataname)
-#    else:
-#        plotutils.plot_kenyan_data(dataname)
+        plotutils.plot_tweet_sentiment(dataname)
+    else:
+        plotutils.plot_kenyan_data(dataname)
 
 
 def __main__():
@@ -603,22 +633,30 @@ def __main__():
 
     # runs a classification experiement a given file
     if arguments.action == "classify" or arguments.action == "explore" or arguments.action == "save":
-        if len(arguments.filename) > 1:
-            tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
-                             p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
-                             clf_name=arguments.clfname, unlabeled_filenames=arguments.filename[1:],
-                             clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
-                             rebuild=arguments.rebuild, action=arguments.action,
-                             experiment_nums=exp_nums,
-                             diff1_max=int(arguments.diff1_max), diff0_max=int(arguments.diff0_max))
-        else:
-            tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
-                             p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
-                             clf_name=arguments.clfname, unlabeled_filenames=None,
-                             clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
-                             rebuild=arguments.rebuild, action=arguments.action,
-                             experiment_nums=exp_nums, test_filename=test_filename,
-                             diff1_max=int(arguments.diff1_max), diff0_max=int(arguments.diff0_max))
+        if arguments.clfname == "w2v":
+
+            if len(arguments.filename) > 1:
+                tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
+                                 p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
+                                 clf_name=arguments.clfname, unlabeled_filenames=arguments.filename[1:],
+                                 clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
+                                 rebuild=arguments.rebuild, action=arguments.action,
+                                 experiment_nums=exp_nums,
+                                 diff1_max=int(arguments.diff1_max), diff0_max=int(arguments.diff0_max))
+            else:
+                tweet_classification(arguments.filename[0], size=size, window=window, dataname=arguments.dataname,
+                                 p=percentage, thresh=threshhold, n_trial=ntrial, min_count=min_count,
+                                 clf_name=arguments.clfname, unlabeled_filenames=None,
+                                 clf_base=arguments.clfbase, recluster_thresh=recluster_thresh,
+                                 rebuild=arguments.rebuild, action=arguments.action,
+                                 experiment_nums=exp_nums, test_filename=test_filename,
+                                 diff1_max=int(arguments.diff1_max), diff0_max=int(arguments.diff0_max))
+        elif arguments.clfname == 'bow':
+                tweet_bow_classification(arguments.filename[0], dataname=arguments.dataname,
+                                 p=percentage, thresh=threshhold, n_trial=ntrial,
+                                 clf_name=arguments.clfname,
+                                 clf_base=arguments.clfbase,
+                                 action=arguments.action)
 
     # clusters the vocabulary of a given file accoding to the w2v model constructed on the same file
     elif arguments.action == "cluster":

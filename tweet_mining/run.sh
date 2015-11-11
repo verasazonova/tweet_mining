@@ -32,10 +32,10 @@ if [ "$1" == "sentiment" ]; then
 
     touch $OUTPUT
 
-    PS="0.5"
+    PS="0.1"
     THRESHS="0"
-    NS="0"
-    CLFS="w2v"
+    NS="0 1 2 3 4 5"
+    CLFS="bow"
 
     for P in $PS; do
         DNAME=$DNAME_BASE #"_"${P/0./}
@@ -43,7 +43,9 @@ if [ "$1" == "sentiment" ]; then
             for N in $NS; do
                 for CLF in $CLFS; do
                     NAME=$DNAME_${P/0./}_${THRESH/0./}".txt"
-                    python $MAIN_PY -f $DATA --dname $DNAME --test $TEST_DATA --size 300 --window 10 --min 1 --nclusters 30 --clusthresh 0  --p $P --thresh $THRESH --ntrial $N --clfname $CLF --clfbase lr --action classify
+                    COMMAND="$MAIN_PY -f $DATA --dname $DNAME --test $TEST_DATA --size 300 --window 10 --min 1 --nclusters 30 --clusthresh 0  --p $P --thresh $THRESH --ntrial $N --clfname $CLF --clfbase lr --action classify"
+                    echo $COMMAND
+                    python $COMMAND
                 done
             done
         done

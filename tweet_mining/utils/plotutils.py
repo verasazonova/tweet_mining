@@ -36,7 +36,7 @@ def get_cmap(n_colors):
     RGB color.
     """
     color_norm = colors.Normalize(vmin=0, vmax=n_colors-1)
-    scalar_map = cmx.ScalarMappable(norm=color_norm, cmap='Spectral')
+    scalar_map = cmx.ScalarMappable(norm=color_norm, cmap='Set1') #'Spectral')
 
     def map_index_to_rgb_color(index):
         return scalar_map.to_rgba(index)
@@ -157,7 +157,7 @@ def extract_conditions(data, conditions=None):
 
 
 def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker='o', cdict=None, conditions=None, witherror=False,
-                              series=False, labels=None):
+                              line='-',series=False, labels=None, ax=None):
 
     data = extract_conditions(data_raw, conditions)
 
@@ -167,7 +167,7 @@ def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker='o', cdict=None
         np.set_printoptions(precision=4)  #formatter={'float': '{: 0.3f}'.format})
         if series:
             xvals, yvals, yerrs = extract_data_series(data, xind, yind, cind, cval)
-            if cval in labels:
+            if labels is not None and cval in labels:
                 print "%-10s" % labels[cval],
             else:
                 print "%-10s" % cval,
@@ -189,10 +189,13 @@ def plot_multiple_xy_averages(data_raw, xind, yind, cind, marker='o', cdict=None
             label = labels[cval]
         else:
             label = cval
+        if ax is None:
+            ax = plt.gca()
         if witherror:
-            plt.errorbar(xvals, yvals, yerr=yerrs, fmt='-', marker=marker, color=color, label=label, elinewidth=0.5)
+            ax.errorbar(xvals, yvals, yerr=yerrs, fmt=line, marker=marker, color=color, label=label, elinewidth=0.3,
+                        markersize=5)
         else:
-            plt.plot(xvals, yvals, '-', marker=marker, color=color, label=label)
+            ax.plot(xvals, yvals, line, marker=marker, color=color, label=label)
 
 
 def extract_base(data, xind, yind, cind, cval):
@@ -204,12 +207,15 @@ def extract_base(data, xind, yind, cind, cval):
     return xvals, yvals
 
 
-def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None, labels=None):
+def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None, labels=None, ax=None):
 
     data = extract_conditions(data_raw, conditions)
 
     cvals = sorted(list(set(data[:, cind])))
 
+    if ax is None:
+        print "using gca"
+        ax = plt.gca()
     for cval in cvals:
         xvals, yvals = extract_base(data, xind, yind, cind, cval)
         if cdict is None:
@@ -222,7 +228,7 @@ def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None,
             label = cval
         else:
             label = labels[cval]
-        plt.plot(xvals, yvals, '--', color=color, label=label)
+        ax.plot(xvals, yvals, ':', color=color, label=label)
 
 
 def make_labels(title=""):
@@ -301,95 +307,143 @@ def plot_tweet_sentiment(dataname):
 
     data, cdict, names = read_data(dataname, cind=4)
 
+    data_bow, _, _ = read_data("../BOW/sentiment", cind=4)  #= np.loadtxt("../bow_f-scores-100-10.txt")
     y_ind = 11
 
-    data[:, 7] = 1600359 * (data[:, 4] + data[:, 5] - data[:, 4] * data[:, 5])
+    data[:, 7] = 100 * (data[:, 4] + data[:, 5] - data[:, 4] * data[:, 5])  # 1600359
+
+    colors=['r', 'g', 'b']
 
     size=100
 
-    #data2, cdict, names2 = read_data(dataname+"_300", cind=4, cdict=cdict)
-    #data2[:, 7] = 1600359 * (data2[:, 4] + data2[:, 5] - data2[:, 4] * data2[:, 5])
+    fig, axes = plt.subplots(ncols=2, nrows=1, figsize=(8,3.5))
+    plt.tight_layout()
+    ax1, ax2 = axes.ravel()
 
-    #data = np.concatenate([data, data2])
-    #names.update(names2)
+    labels = [r'$\mu$',r'$\sigma$']
+    for i in range(1,10):
+        labels.append(r'$\tau^%i$' % i)
+        labels.append(r'$\tau_\sigma^%i$' % i)
+
+    for i in range(data.shape[0]):
+        if data[i, 4] == 1:
+            data[i, 5] = 0
+    ls_100 = dict( [(p, "%i%% (%i)" % (100*p, 100)) for p in [0.1, 0.5, 1]])
+    ls_300 = dict( [(p, "%i%% (%i)" % (100*p, 300)) for p in [0.1, 0.5, 1]])
+
+    for p in [0.1, 0.5, 1]:
+        plot_multiple_xy_averages(data, 2, y_ind, 4, cdict=cdict, marker='.', witherror=True, series=False,
+                              conditions=[(5, 0), (3, 100), (4, p)], ax=ax1, labels=ls_100)
+        plot_multiple_xy_averages(data, 2, y_ind, 4, cdict=cdict, marker='.', line='--', witherror=True, series=False,
+                              conditions=[(5, 0), (3, 300), (4, p)], ax=ax1, labels=ls_300)
+    #ax1.grid()
+    ax1.set_ylim([0.74, 0.79])
+    ax1.set_xlim([0, len(labels)])
+    ax1.set_xticks(range(1, len(labels)),)
+    ax1.set_xticklabels(labels, rotation=0, ha='center')
+    ax1.tick_params(axis='x', labelsize=10)
+    ax1.tick_params(axis='y', labelsize=10)
+    ax1.set_ylabel("F-score", fontsize='x-small')
+    ax1.set_xlabel("Features",fontsize='x-small')
+    # get handles
+    handles, ls = ax1.get_legend_handles_labels()
+    # remove the errorbars
+    handles = [h[0] for h in handles]
+    # use them in the legend
+    ax1.legend(handles,ls, loc='upper center', ncol=3, fancybox=True, shadow=False, fontsize='xx-small',
+               bbox_to_anchor=(0.5, 1.1))
+
 
     print names
-    markers = ['o', '<', 's']
-    for t in [1, 2, 5, 9]:
-    #plt.gca().set_xscale("log", nonposx='clip')
-        for i, size in enumerate([100, 300]):
-            plt.figure()
-            plot_multiple_xy_averages(data, 7, 9, 4, cdict=cdict, marker='s', witherror=False, series=False,
-                                      conditions=[(2, t), (3,size)],
-                                      labels={0.001: "0.1%% - %i" % size,
-                                              0.01: "1%% - %i" % size,
-                                              0.5: "50%% - %i" % size,
-                                              0.1: "10%% - %i" % size,
-                                              1: "100%% - %i" % size})
-            plot_multiple_xy_averages(data, 7, 10, 4, cdict=cdict, marker='o', witherror=False, series=False,
-                                      conditions=[(2, t), (3,size)],
-                                      labels={0.001: "0.1%% - %i" % size,
-                                              0.01: "1%% - %i" % size,
-                                              0.5: "50%% - %i" % size,
-                                              0.1: "10%% - %i" % size,
-                                              1: "100%% - %i" % size})
+    for t,ax,c in zip([2], [ax2], colors):
+        #plt.figure()
 
-            plt.title("Tweet sentiment data %s %i" % (names[t][3:], size))
-            plt.xlabel("W2v corpus length")
-            plt.ylabel("Precision and Recall")
-            plt.gca().ticklabel_format(axis='x', style='sci', scilimits=(-2, 2))
-            plt.ylim([0.62, 0.9])
-            plt.xlim([-1e5, 1.8e6])
-            plt.grid()
-            plt.savefig("%s_%i_%i_w2v.pdf" % (dataname, size, t))
+        #f, (ax1, ax2) = plt.subplots(2, sharex=True, sharey=True)
+        #f, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, sharex='col', sharey='row')
+        #f.subplots_adjust(hspace=0, wspace=0)
+        #plt.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
+
+        ax1.axvspan(t-0.15, t+0.15, facecolor=c, alpha=0.3, edgecolor='none')
+
+        plot_multiple_xy_averages(data, 7, y_ind, 4, cdict=cdict, marker='s', witherror=True, series=False,
+                                  conditions=[(2, t), (3, 100)], ax=ax,
+                                  labels={0.001: "0.1%", 0.01: "1%", 0.1: "10%", 0.5:"50%", 1:"100%"})
+        plot_multiple_xy_averages(data, 7, y_ind, 4, cdict=cdict, marker='v', witherror=True, series=False, line='--',
+                                  conditions=[(2, t), (3, 300)], ax=ax,
+                                  labels={0.001: "0.1%", 0.01: "1%", 0.1: "10%", 0.5:"50%", 1:"100%"})
+
+        ax.text(1, 0.77, labels[t-1], bbox=dict(facecolor=c, alpha=0.3, boxstyle="round,pad=.2",))
+
+        ax.set_ylim([0.55, 0.79])
+        ax.set_xlim([-5, 105])
+        ax.tick_params(axis='x', labelsize=10)
+        ax.tick_params(axis='y', labelsize=10)
+        ax.set_xlabel("W2v corpus size (% of total)",fontsize='x-small')
+        ax.set_ylabel("F-score", fontsize='x-small')
+        #plt.legend(loc="lower right",  ncol=2, fancybox=True, shadow=True, fontsize='x-small')
+        #plt.savefig("%s_%i_%i.pdf" % (dataname, size, t))
+
+    plot_multiple_bases(data_bow, 7, y_ind, 4, cdict=cdict, ax=ax2)
+    #plot_multiple_bases(data_bow, 2, 3,1, cdict=cdict, ax=ax3)
+    #plot_multiple_bases(data_bow, 2, 3,1, cdict=cdict, ax=ax4)
+    plt.savefig("all.pdf")
 
     size=100
 
-    data, cdict, names = read_data(dataname, cind=3)
-    t=0
-    for i, p in enumerate([0.1, 0.5, 1]):
-        if p==1:
-            t = 1
-        plt.figure()
-        plot_multiple_xy_averages(data, 2, 9, 3, cdict=cdict, marker='s', witherror=True, series=False,
-                                  conditions=[(5, t), (4, p)],
-                                  labels={100:"Precision (100)", 300:"Precision (300)"})
+    lines = ['-', '-']
 
-        plot_multiple_xy_averages(data, 2, 10, 3, cdict=cdict, marker='o', witherror=True, series=False,
-                                  conditions=[(5, t), (4, p)],
-                                  labels={100:"Recall (100)", 300:"Recall (300)"})
+    #plt.figure()
+    for j, t in enumerate([0, 1]):
+        for i in range(data.shape[0]):
+            if data[i, 4] == 1:
+                data[i, 5] = t
+        plt.figure()
+        f, (ax1, ax2) = plt.subplots(2, sharex=True, sharey=True)
+        f.subplots_adjust(hspace=0)
+        plt.setp([a.get_xticklabels() for a in f.axes[:-1]], visible=False)
+
+        plot_multiple_xy_averages(data, 2, y_ind, 4, cdict=cdict, marker='o', witherror=True, series=False,
+                                  conditions=[(5, t), (3, 100)], ax=ax1)
+                                  #labels={100:"%i%%-%i (100)" % (p,t), 300: "%i%% -%i(300)" % (p,t)})
+        #plt.xlim([0, 18])
+        plt.ylabel("F-score")
+
+        plot_multiple_xy_averages(data, 2, y_ind, 4, cdict=cdict, marker='o', witherror=True, series=False,
+                                  conditions=[(5, t), (3, 300)], ax=ax2,
+                                  labels={0.001: "0.1%", 0.01: "1%", 0.1: "10%", 0.5:"50%", 1:"100%"})
                                   #labels={0.001: "0.1%% - %i%% " % (100*t), 0.01: "1%% - %i%%" % (t*100),
                                   #        0.5:"50%% - %i%% " % (100*t),
                                   #        0.1: "10%% - %i%% " % (100*t), 1: "100%% - %i%% " % (100*t)})
-        labels = [name[3:] for name in sorted(names.values())]
+#        labels = [name[3:] for name in sorted(names.values())]
+        labels = [r'$\mu$',r'$\sigma$']
+        for i in range(1,10):
+            labels.append(r'$\tau^%i$' % i)
+            labels.append(r'$\tau_\sigma^%i$' % i)
+        #plt.ylim([0.7, 0.79])
+        plt.xlim([0, len(labels)])
+        ax1.text(1, 0.78, " 100D ", bbox=dict(facecolor='white', alpha=1, boxstyle="round,pad=.2",))
+        ax2.text(1, 0.78, " 300D ", bbox=dict(facecolor='white', alpha=1, boxstyle="round,pad=.2",))
         plt.gca().set_xticks(range(1, len(labels)),)
-        plt.gca().set_xticklabels(labels, rotation=45, ha='center')
-        plt.gca().tick_params(axis='x', labelsize=8)
-        plt.legend(loc='lower center', bbox_to_anchor=(0.5, -0.1), ncol=2, fancybox=True, shadow=True)
-        plt.ylabel("Precision and recall")
-        plt.title("Tweet sentiment data for %i%%" % (p*100))
-        plt.xlabel("Features")
-        plt.ylim([0.65, 0.9])
-        plt.grid()
-        plt.savefig("%s_%0.1f_features_w2v.pdf" % (dataname, p))
-
-    data, cdict, names = read_data(dataname, cind=2)
-    data[:,4] *= 100
-    for i in range(data.shape[0]):
-        if data[i, 4] == 100:
-            data[i, 5] = 1
-
-    for size in [100,300, 500]:
-        plt.figure()
-        plot_multiple_xy_averages(data, 4, y_ind, 2, cdict=cdict, marker='s', witherror=True, series=False,
-                              conditions=[(5, 1), (3, size)], labels=names)
+        plt.gca().set_xticklabels(labels, rotation=0, ha='center')
+        plt.gca().tick_params(axis='x', labelsize=12)
         plt.ylabel("F-score")
-        plt.title("Tweet sentiment data %i " % size)
-        plt.xlabel("Labelled data size (% of total)")
-        plt.xlim([-5, 105])
-        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0), ncol=2, fancybox=True, shadow=True)
-        plt.grid()
-        plt.savefig( "%s_full_trained_%i_w2v.pdf" % (dataname, size))
+        #plt.title("%i unlabelled data" % t)
+        plt.xlabel("Features")
+#            plt.ylim([0.65, 0.89])
+        ax1.grid()
+        ax1.set_ylim([0.7, 0.79])
+        ax2.grid()
+        plt.legend(loc='lower center', bbox_to_anchor=(0.5, 0), ncol=3, fancybox=True, shadow=True)
+        plt.savefig("%s_features_%i_w2v.pdf" % (dataname, t))
+    #a = plt.axes([0.2, 0.1, .4, .4], axisbg='w')
+    #p=100
+    #t=1
+    #plot_multiple_xy_averages(data, 2, 8, 3, cdict=cdict, marker=markers[i], line=lines[j], witherror=True, series=False,
+    #                          conditions=[(5, t), (4, p)],
+    #                          labels={100:"%i%%-%i (100)" % (p,t), 300: "%i%% -%i(300)" % (p,t)})
+
+    #plt.savefig("%s_features_w2v.pdf" % (dataname))
+
 
 
 def plot_kenyan_data(dataname):
@@ -402,35 +456,99 @@ def plot_kenyan_data(dataname):
     inv_types[8]= 'cluster'
     print inv_types
 
-    for suffix in ["lr", "svm"]:
+    series_data, cdict, names = read_data("./100D-features-series/mpeketoni", cind=2)
 
-        filename = dataname + "_" + suffix + "_fscore.txt"
-        if isfile(filename):
-            data_lr = np.loadtxt(filename, delimiter=',', converters=converter)
-            cvals = sorted(TYPES.values())
-            cmap = get_cmap(len(cvals))
-            cdict = {}
-            for i, cval in enumerate(cvals):
-                cdict[cval] = cmap(i)
-#            plot_multiple_xy_averages(data_lr, 2, 8, 3, 's', cdict='b', witherror=False)
+    features_data, cdict, names = read_data("./100D-diff0-diff1/mpeketoni", cind=2)
+    plt.figure()
 
-            for cval in [TYPES['0_avg'], TYPES['1_std'], TYPES['4_diff0_3'], TYPES['7_diff1_3'], TYPES['cluster']]:
-                plot_multiple_xy_averages(data_lr, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
-                                      labels=inv_types, conditions=[(2, cval)])
+    plot_multiple_xy_averages(features_data, 2, 8, 4, cdict='r', marker='o', witherror=True, series=False)
+    labels = [r'$\mu$',r'$\sigma$']
+    for i in range(1,6):
+        labels.append(r'$\kappa^%i$' % i)
+        labels.append(r'$\kappa_\sigma^%i$' % i)
+    for i in range(1,6):
+        labels.append(r'$\tau^%i$' % i)
+        labels.append(r'$\tau_\sigma^%i$' % i)
+    plt.gca().set_xticks(range(1, len(labels)),)
+    plt.gca().set_xticklabels(labels, rotation=0, ha='center')
+    plt.xlim([0, len(labels)])
+    plt.xlabel("Features")
+    plt.ylabel("Minority f-score")
+    plt.grid()
+    plt.ylim([0.56, 0.86])
 
-            plt.grid()
+    ax = plt.axes([0.45, 0.17, .4, .4], axisbg='w')
 
-            #data_base = np.loadtxt("../mpeketoni_svm_fscore bow_only_reference.txt", delimiter=',', converters=converter)
-            #data_bow = np.concatenate([data_base for i in range(10)], axis=0)
+    cmap = get_cmap(5)
+    for i, key in enumerate([1,2,5,7,8]):
+        cdict[key] = cmap(i)
 
-            #plot_multiple_xy_averages(data_bow, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
-            #                          conditions=[(2, TYPES['bow'])])
+    labels={1:r'$\mu$', 2:r'$\sigma$', 5:r'$\kappa^3$', 7:r'$\tau^3$', 8:'cluster'}
+    for t in [1,2,5,7,8]:
+        plot_multiple_xy_averages(series_data, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+                              labels=labels, conditions=[(2, t)], ax=ax)
 
-            plt.legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=3,
-                       fancybox=True, shadow=True)
+#    ax.grid()
 
-            plt.ylabel("Minority f-score")
-            plt.title("Mpeketoni dataset")
-            plt.xlabel("5 trials of 5-fold xvalidation")
+    #data_base = np.loadtxt("../mpeketoni_svm_fscore bow_only_reference.txt", delimiter=',', converters=converter)
+    #data_bow = np.concatenate([data_base for i in range(10)], axis=0)
 
-    plt.savefig(dataname+"w2v.pdf")
+    #plot_multiple_xy_averages(data_bow, 0, 8, 2, '.', cdict=cdict, witherror=False, series=True,
+    #                          conditions=[(2, TYPES['bow'])])
+
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), ncol=5, fancybox=True, shadow=True, fontsize='x-small')
+
+    ax.set_ylabel("Minority f-score", fontsize='x-small')
+    ax.set_xlabel("5 trials of 5-fold xvalidation", fontsize='x-small')
+
+    plt.savefig(dataname+".pdf")
+
+    data, cdict, names = read_data("./2015-10-11-12-10/mpeketoni2", cind=3)
+
+    print names
+
+    plt.figure()
+    for size in [100, 300]:
+        plot_multiple_xy_averages(data, 2, 9, 3, cdict=cdict, marker='s', witherror=True, series=False,
+                                  conditions=[(3, size)],
+                                  labels={100: "Precision (100)", 300: "Precision (300)"})
+
+        plot_multiple_xy_averages(data, 2, 10, 3, cdict=cdict, marker='o', witherror=True, series=False,
+                                  conditions=[(3, size)],
+                                  labels={100: "Recall (100)", 300: "Recall (300)"})
+
+
+    labels = [r'$\mu$',r'$\sigma$']
+    for i in range(1,6):
+        labels.append(r'$\tau^%i$' % i)
+        labels.append(r'$\tau_\sigma^%i$' % i)
+    plt.gca().set_xticks(range(1, len(labels)),)
+    plt.gca().set_xticklabels(labels, rotation=0, ha='center')
+    plt.xlim([0, len(labels)-1])
+    plt.xlabel("Features", fontsize='x-small')
+    plt.ylabel("Minority precision and recall", fontsize='x-small')
+    plt.grid()
+    #plt.ylim([0.56, 0.86])
+    plt.legend(loc='upper left', ncol=2, fancybox=True, shadow=True, fontsize='x-small')
+
+    ax = plt.axes([0.52, 0.17, .36, .36], axisbg='w')
+    plot_multiple_xy_averages(features_data, 2, 8, 4, cdict='b', marker='o', witherror=True, series=False, ax=ax)
+    labels = [r'$\mu$']
+    for i in range(1,6):
+        labels.append(r'$\kappa^%i$' % i)
+        #labels.append(r'$\kappa_\sigma^%i$' % i)
+    for i in range(1,6):
+        labels.append(r'$\tau^%i$' % i)
+        #labels.append(r'$\tau_\sigma^%i$' % i)
+    ax.set_xticks(range(1, 2*len(labels), 2))
+    ax.set_xticklabels(labels, rotation=0, ha='center')
+    ax.tick_params(axis='y', labelsize=10)
+    ax.set_xlim([0, 2*len(labels)])
+    ax.set_xlabel("Features", fontsize='x-small')
+    ax.set_ylabel("Minority f-score", fontsize='x-small')
+    ax.grid(axis='y')
+    ax.set_ylim([0.56, 0.86])
+
+
+
+    plt.savefig("mpeketoni_precision.pdf")
