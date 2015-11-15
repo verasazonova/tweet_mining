@@ -41,10 +41,11 @@ class BOWModel(BaseEstimator, TransformerMixin):
     def transform(self, X):
         x_clean = tu.clean_and_tokenize(X, stoplist=self.stoplist)
         x_tfidf = self.tfidf[[self.dictionary.doc2bow(text) for text in x_clean]]
+        x_data = matutils.corpus2csc(x_tfidf, num_terms=len(self.dictionary))
         #x_data = matutils.corpus2dense(x_tfidf, num_terms=len(self.dictionary)).T
         #logging.info("Returning data of shape %s " % (len(x_data)))
         #returning a csr matrix
-        return x_tfidf
+        return x_data
 
 
 # A class encompassing a W2V representation for texts through a sklearn transforme interface
