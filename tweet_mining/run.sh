@@ -34,7 +34,7 @@ if [ "$1" == "sentiment" ]; then
 
     PS="0.1"
     THRESHS="0"
-    NS="0 1 2 3 4 5"
+    NS="0"
     CLFS="bow"
 
     for P in $PS; do
