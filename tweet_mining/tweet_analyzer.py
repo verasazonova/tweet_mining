@@ -191,7 +191,9 @@ def explore_classifier(x, y, clf=None, n_trials=1, orig_data=None):
 
 #------------------
 def make_x_y(filename, fields=None):
-    stop_path = "/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/utils/en_swahili.txt"
+#    stop_path = "/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/utils/en_swahili.txt"
+
+    stop_path = os.path.join(os.path.dirname(ioutils.__file__), "en_swahili.txt")
 
     dataset = ioutils.KenyanCSVMessage(filename, fields=fields, stop_path=stop_path)
 

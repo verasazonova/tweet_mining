@@ -204,6 +204,7 @@ def extract_base(data, xind, yind, cind, cval):
     #xvals = [min(data[:, xind]), max(data[:, xind])]
     xvals = plt.xlim()
     yvals = [data[ind, yind].mean(), data[ind, yind].mean()]
+    print "bow", xvals, yvals
     return xvals, yvals
 
 
