@@ -253,7 +253,7 @@ def tweet_bow_classification(filename, dataname, n_trial=None,  p=None, thresh=N
     x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
                                                                                   n_trial=n_trial, dataname=dataname)
 
-    bow = transformers.BOWModel(no_above=0.9, no_below=2, stoplist=stoplist)
+    bow = transformers.BOWModel(no_above=0.8, no_below=5, stoplist=stoplist)
 
     # get matrices of features from x_data
     data = bow.fit_transform(x_data)
