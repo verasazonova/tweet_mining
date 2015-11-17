@@ -91,16 +91,17 @@ else
     OUTPUT=$DNAME".txt"
 
     NS="0 1 2 3 4"
-    SIZES="100 200 300"
+    SIZES="100"
 
     touch $OUTPUT
     for SIZE in $SIZES; do
         for N in $NS; do
-            python $MAIN_PY -f $DATA $DATA2 --dname $DNAME  --size $SIZE  --min 1  --window 10 --nclusters 30 --ntrial $N --clusthresh 0 --clfname w2v  --clfbase lr  --action classify
+            python $MAIN_PY -f $DATA $DATA2 --dname $DNAME  --size $SIZE  --min 1  --window 10  --ntrial $N --clfname w2v  --clfbase lr  --action classify --p 1 --thresh 0
             rm *.npy
             rm w2v_model_*
         done
     done
+    python $MAIN_PY -f $DATA $DATA2 --dname $DNAME  --size $SIZE  --min 1  --window 10 --ntrial $N --clfname bow  --clfbase lr  --action classify --p 1 --thresh 0
     #python $MAIN_PY -f $DATA --dname $DNAME  --size 100  --min 5  --window 10 --nclusters 30 --clfname bow  --clfbase lr  --action classify >> $OUTPUT
     #python $MAIN_PY --dname $DNAME --action plot >> $OUTPUT
 

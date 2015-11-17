@@ -216,7 +216,7 @@ def make_x_y(filename, fields=None):
 #------------------
 
 def read_and_split_data(filename, p=1, thresh=0, n_trial=0, unlabeled_filenames=None, dataname=""):
-    x_full, y_full, stoplist, ids = make_x_y(filename, ["text", "label", "id_str"])
+    x_full, y_full, stoplist, ids = make_x_y(filename, ["text", "label"])
 
     if unlabeled_filenames is not None:
         x_unlabeled = []
@@ -259,6 +259,8 @@ def tweet_bow_classification(filename, dataname, n_trial=None,  p=None, thresh=N
     data = bow.fit_transform(x_data)
 
     if clf_base == "lr":
+        clf = LogisticRegression()
+    elif clf_base == "sdg":
         clf = sklearn.linear_model.SGDClassifier(loss='log', penalty="l2",alpha=0.005, n_iter=5, shuffle=True)
     else:
         clf = SVC(kernel='linear', C=1)
@@ -272,9 +274,9 @@ def tweet_bow_classification(filename, dataname, n_trial=None,  p=None, thresh=N
         with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
 
             for i, score in enumerate(scores):
-                f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i \n" %
+                f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i, %s \n" %
                        (n_trial, i, name, -1, p, thresh, data.shape[0], data.shape[0]*(p+thresh-p+thresh),
-                        score[0], score[1], score[2], score[3], -1))
+                        score[0], score[1], score[2], score[3], -1, clf_base))
             f.flush()
 
 
@@ -383,6 +385,8 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
             stop = experiment[0][1]
 
             if clf_base == "lr":
+                clf = LogisticRegression()
+            elif clf_base == "sdg":
                 clf = sklearn.linear_model.SGDClassifier(loss='log', penalty="l2",alpha=0.005, n_iter=5, shuffle=True)
             else:
                 clf = SVC(kernel='linear', C=1)
@@ -399,9 +403,9 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                 print name, scores, scores.shape
 
                 for i, score in enumerate(scores):
-                    f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i \n" %
+                    f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i, %s \n" %
                            (n_trial, i, name, size, p, thresh, w2v_data.shape[0], w2v_data.shape[0]*(p+thresh-p+thresh),
-                            score[0], score[1], score[2], score[3], n_components))
+                            score[0], score[1], score[2], score[3], n_components, clf_base))
                 f.flush()
 
             elif action == "explore":
