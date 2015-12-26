@@ -10,6 +10,7 @@ import numpy as np
 import re
 from tweet_mining.utils import ioutils, plotutils
 from tweet_mining.utils import textutils as tu
+from tweet_mining.utils import medical
 import w2v_models
 import pickle
 import lda_models
@@ -120,32 +121,32 @@ def run_train_test_classifier(x, y, train_end, start, stop, clf=None):
     return scores
 
 
-def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=5):
+def run_cv_classifier(x, y, clf=None, fit_parameters=None, n_trials=10, n_cv=2, direct=False):
     # all cv will be averaged out together
-    scores = np.zeros((n_trials * n_cv, 4))
+    scores = np.zeros((n_trials * n_cv, 5))
     for n in range(n_trials):
         logging.info("Testing: trial %i or %i" % (n, n_trials))
 
         x_shuffled, y_shuffled = shuffle(x, y, random_state=n)
         skf = cross_validation.StratifiedKFold(y_shuffled, n_folds=n_cv)  # random_state=n, shuffle=True)
-        #score_names = ['accuracy', 'precision', 'recall',  'f1']
-        #for i, scoring_name in enumerate(score_names):
-        #    sc = cross_validation.cross_val_score(clf, x_shuffled, y=y_shuffled, cv=skf,
-        #                                          scoring=scoring_name,
-        #                                          fit_params=fit_parameters,
-        #                                          verbose=2, n_jobs=1)
-        #    scores[n * n_cv: n*n_cv + n_cv, i] = sc
-        #predictions = cross_validation.cross_val_predict(clf, x_shuffled, y=y_shuffled, cv=skf, n_jobs=1, verbose=2)
-        n_fold = 0
-        for train_ind, test_ind in skf:
-            clf.fit(x_shuffled[train_ind, :], y_shuffled[train_ind])
-            predictions = clf.predict(x_shuffled[test_ind, :])
-            for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score   ,
-                                        sklearn.metrics.recall_score, sklearn.metrics.f1_score]):#
+        if direct:
+            n_fold = 0
+            for train_ind, test_ind in skf:
+                clf.fit(x_shuffled[train_ind, :], y_shuffled[train_ind])
+                predictions = clf.predict(x_shuffled[test_ind, :])
+                for i, metr in enumerate([sklearn.metrics.accuracy_score, sklearn.metrics.precision_score,
+                                            sklearn.metrics.recall_score, sklearn.metrics.f1_score,
+                                            sklearn.metrics.roc_auc_score]):
 
-                sc = metr(y_shuffled[test_ind], predictions)
-                scores[n * n_cv + n_fold, i] = sc
-            n_fold += 1
+                    sc = metr(y_shuffled[test_ind],predictions)
+                    scores[n * n_cv + n_fold, i] = sc
+                n_fold += 1
+        else:
+            for i, scoring_name in enumerate(['accuracy', 'precision', 'recall', 'f1', 'roc_auc']):
+                sc = cross_validation.cross_val_score(clf, x_shuffled, y_shuffled, cv=skf,
+                                                                           scoring=scoring_name,
+                                                                           verbose=0, n_jobs=1)
+                scores[n * n_cv: (n+1) *n_cv, i] = sc
     #print scores, scores.mean(), scores.std()
     return scores
 
@@ -190,29 +191,49 @@ def explore_classifier(x, y, clf=None, n_trials=1, orig_data=None):
     print "False negatives:", len(false_negatives)
 
 #------------------
-def make_x_y(filename, fields=None):
+def make_x_y(filename, fields=None, file_type="medical"):
 #    stop_path = "/Users/verasazonova/Work/PycharmProjects/tweet_mining/tweet_mining/utils/en_swahili.txt"
 
-    stop_path = os.path.join(os.path.dirname(ioutils.__file__), "en_swahili.txt")
+    if file_type=="tweets":
+        stop_path = os.path.join(os.path.dirname(ioutils.__file__), "en_swahili.txt")
 
-    dataset = ioutils.KenyanCSVMessage(filename, fields=fields, stop_path=stop_path)
+        dataset = ioutils.KenyanCSVMessage(filename, fields=fields, stop_path=stop_path)
 
-    tweet_text_corpus = [tweet[dataset.text_pos] for tweet in dataset]
-    if dataset.label_pos is not None:
-        labels = [tweet[dataset.label_pos] for tweet in dataset]
+        tweet_text_corpus = [tweet[dataset.text_pos] for tweet in dataset]
+        if dataset.label_pos is not None:
+            labels = [tweet[dataset.label_pos] for tweet in dataset]
+            classes, indices = np.unique(labels, return_inverse=True)
+            # a hack to change the order
+            #indices = -1*(indices - 1)
+            print classes
+            print np.bincount(indices)
+        else:
+            indices = None
+
+        if dataset.id_pos is not None:
+            ids = [tweet[dataset.id_pos] for tweet in dataset]
+        else:
+            ids = None
+        stoplist =  dataset.stoplist
+
+    elif file_type == "text":
+        tweet_text_corpus = [text for text in medical.PMCOpenSubset(filename)]
+        indices=None
+        stoplist=None
+        ids=None
+
+    else:
+        stop_path = os.path.join(os.path.dirname(ioutils.__file__), "stopwords_punct.txt")
+        dataset = medical.MedicalReviewAbstracts(filename, ['T', 'A'], labeled=False, tokenize=False, stop_path=stop_path)
+        tweet_text_corpus = [text for text in dataset]
+        labels = dataset.get_target()
         classes, indices = np.unique(labels, return_inverse=True)
-        # a hack to change the order
-        #indices = -1*(indices - 1)
         print classes
         print np.bincount(indices)
-    else:
-        indices = None
-
-    if dataset.id_pos is not None:
-        ids = [tweet[dataset.id_pos] for tweet in dataset]
-    else:
         ids = None
-    return tweet_text_corpus, indices, dataset.stoplist, ids
+        stoplist = dataset.stoplist
+
+    return tweet_text_corpus, indices, stoplist, ids
 #------------------
 
 def read_and_split_data(filename, p=1, thresh=0, n_trial=0, unlabeled_filenames=None, dataname=""):
@@ -221,7 +242,12 @@ def read_and_split_data(filename, p=1, thresh=0, n_trial=0, unlabeled_filenames=
     if unlabeled_filenames is not None:
         x_unlabeled = []
         for unlabeled in unlabeled_filenames:
-            x, _, _, _ = make_x_y(unlabeled, ["text"])
+            if not os.path.basename(unlabeled).startswith("units_"):
+                file_type = "text"
+            else:
+                file_type = "medical"
+            print "Unlabeled filenames:  ", unlabeled, file_type
+            x, _, _, _ = make_x_y(unlabeled, ["text"], file_type=file_type)
             x_unlabeled += x
     else:
         x_unlabeled = []
@@ -253,7 +279,7 @@ def tweet_bow_classification(filename, dataname, n_trial=None,  p=None, thresh=N
     x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
                                                                                   n_trial=n_trial, dataname=dataname)
 
-    bow = transformers.BOWModel(no_above=0.8, no_below=5, stoplist=stoplist)
+    bow = transformers.BOWModel(no_above=0.8, no_below=8, stoplist=stoplist)
 
     # get matrices of features from x_data
     data = bow.fit_transform(x_data)
@@ -263,20 +289,21 @@ def tweet_bow_classification(filename, dataname, n_trial=None,  p=None, thresh=N
     elif clf_base == "sdg":
         clf = sklearn.linear_model.SGDClassifier(loss='log', penalty="l2",alpha=0.005, n_iter=5, shuffle=True)
     else:
-        clf = SVC(kernel='linear', C=1)
+        clf = SVC(kernel='linear', C=10)
 
     name="BOW"
     if action == "classify":
 
-        scores = run_cv_classifier(data, y_data, clf=clf, n_trials=1, n_cv=5)
-        print name, scores, scores.shape
+        scores = run_cv_classifier(data, y_data, clf=clf, n_trials=10, n_cv=3, direct=False)
+        print name, np.mean(scores, axis=0), scores.shape
+
 
         with open(dataname + "_" + clf_base + "_fscore.txt", 'a') as f:
 
             for i, score in enumerate(scores):
-                f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i, %s \n" %
+                f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %f, %i, %s \n" %
                        (n_trial, i, name, -1, p, thresh, data.shape[0], data.shape[0]*(p+thresh-p+thresh),
-                        score[0], score[1], score[2], score[3], -1, clf_base))
+                        score[0], score[1], score[2], score[3], score[4], -1, clf_base))
             f.flush()
 
 
@@ -300,7 +327,8 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
     if not os.path.isfile(w2v_data_scaled_name+".npy"):
 
         x_data, y_data, unlabeled_data, run_dataname, stoplist, ids = read_and_split_data(filename=filename, p=p, thresh=thresh,
-                                                                                  n_trial=n_trial, dataname=dataname)
+                                                                                  n_trial=n_trial, dataname=dataname,
+                                                                                  unlabeled_filenames=unlabeled_filenames)
 
         train_data_end = len(y_data)
 
@@ -399,13 +427,13 @@ def tweet_classification(filename, size, window, dataname, p=None, thresh=None, 
                     #scores = run_train_test_classifier(w2v_data[0:train_data_end, start:stop], y_data[0:train_data_end],
                     #                                   w2v_data[train_data_end:, start:stop], y_data[train_data_end:], clf=clf)
                 else:
-                    scores = run_cv_classifier(w2v_data[:, start:stop], y_data, clf=clf, n_trials=1, n_cv=5)
-                print name, scores, scores.shape
+                    scores = run_cv_classifier(w2v_data[:, start:stop], y_data, clf=clf, n_trials=10, n_cv=3)
+                print name, np.mean(scores, axis=0), scores.shape
 
                 for i, score in enumerate(scores):
-                    f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %i, %s \n" %
+                    f.write("%i, %i,  %s, %i, %f, %f, %i, %i, %f, %f, %f, %f, %f, %i, %s \n" %
                            (n_trial, i, name, size, p, thresh, w2v_data.shape[0], w2v_data.shape[0]*(p+thresh-p+thresh),
-                            score[0], score[1], score[2], score[3], n_components, clf_base))
+                            score[0], score[1], score[2], score[3], score[4], n_components, clf_base))
                 f.flush()
 
             elif action == "explore":
@@ -579,11 +607,11 @@ def print_tweets(filename):
 
 
 def plot_scores(dataname):
-    if dataname == "sentiment_cv":
+    #if dataname == "sentiment_cv":
 #    plotutils.plot_diff1_dep(dataname, withold=False)
-        plotutils.plot_tweet_sentiment(dataname)
-    else:
-        plotutils.plot_kenyan_data(dataname)
+    #    plotutils.plot_tweet_sentiment(dataname)
+    #else:
+    plotutils.plot_tweet_sentiment(dataname)
 
 
 def __main__():

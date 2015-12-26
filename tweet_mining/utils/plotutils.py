@@ -204,8 +204,9 @@ def extract_base(data, xind, yind, cind, cval):
     #xvals = [min(data[:, xind]), max(data[:, xind])]
     xvals = plt.xlim()
     yvals = [data[ind, yind].mean(), data[ind, yind].mean()]
-    print "bow", xvals, yvals
-    return xvals, yvals
+    std = [data[ind, yind].std(), data[ind, yind].std()]
+    print "bow", cval, xvals, yvals, std
+    return xvals, yvals, std
 
 
 def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None, labels=None, ax=None):
@@ -218,7 +219,7 @@ def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None,
         print "using gca"
         ax = plt.gca()
     for cval in cvals:
-        xvals, yvals = extract_base(data, xind, yind, cind, cval)
+        xvals, yvals, std = extract_base(data, xind, yind, cind, cval)
         if cdict is None:
             color = 'k'
         elif isinstance(cdict, string_types):
@@ -229,7 +230,8 @@ def plot_multiple_bases(data_raw, xind, yind, cind, cdict=None, conditions=None,
             label = cval
         else:
             label = labels[cval]
-        ax.plot(xvals, yvals, ':', color=color, label=label)
+        ax.plot(xvals, yvals, '--', color=color, label=label)
+        # ax.axhspan(yvals[0]-std[0], yvals[0]+std[0], facecolor=color, alpha=0.1, edgecolor='none')
 
 
 def make_labels(title=""):
@@ -244,17 +246,22 @@ def make_labels(title=""):
 
 def read_data(dataname, cind=2, cdict=None):
     types = {}
-    def convert_str_type(s):
+    lr={}
+    def convert_str_type(s, types):
         s1 = s.strip()
         if s1 in types.keys():
             return types[s1]
         else:
             types[s1] = len(types) + 1
         return types[s1]
+    def convert_str(s):
+        return convert_str_type(s, types)
+    def convert_lr(s):
+        return convert_str_type(s, lr)
 
-    converter = {2: convert_str_type}
+    converter = {2: convert_str } #, 14: convert_lr}
 
-    name = dataname+"_lr_fscore.txt"
+    name = dataname+"_fscore.txt"
     if isfile(name):
         data = np.loadtxt(name, delimiter=',', converters=converter)
         inv_types = dict([(v, k) for (k, v) in types.items()])
@@ -264,7 +271,7 @@ def read_data(dataname, cind=2, cdict=None):
         cmap = get_cmap(len(cvals))
         for i, cval in enumerate(cvals):
             cdict[cval] = cmap(i)
-        return data, cdict, inv_types
+        return data, cdict, types
 
     return None
 
@@ -308,7 +315,7 @@ def plot_tweet_sentiment(dataname):
 
     data, cdict, names = read_data(dataname, cind=4)
 
-    data_bow, _, _ = read_data("../BOW/sentiment", cind=4)  #= np.loadtxt("../bow_f-scores-100-10.txt")
+    data_bow, _, _ = read_data("../BOW/sentiment_lr", cind=4)  #= np.loadtxt("../bow_f-scores-100-10.txt")
     y_ind = 11
 
     data[:, 7] = 100 * (data[:, 4] + data[:, 5] - data[:, 4] * data[:, 5])  # 1600359
@@ -329,8 +336,12 @@ def plot_tweet_sentiment(dataname):
     for i in range(data.shape[0]):
         if data[i, 4] == 1:
             data[i, 5] = 0
-    ls_100 = dict( [(p, "%i%% (%i)" % (100*p, 100)) for p in [0.1, 0.5, 1]])
+    ls_bow = dict( [(p, "%i%% (bow)" % (100*p)) for p in [0.01, 0.1, 0.5, 1]])
     ls_300 = dict( [(p, "%i%% (%i)" % (100*p, 300)) for p in [0.1, 0.5, 1]])
+    ls_100 = dict( [(p, "%i%% (%i)" % (100*p, 100)) for p in [0.01, 0.1, 0.5, 1]])
+
+    ls_bow[0.001]="0.1 (bow)"
+    ls_100[0.001]="0.1 (100)"
 
     for p in [0.1, 0.5, 1]:
         plot_multiple_xy_averages(data, 2, y_ind, 4, cdict=cdict, marker='.', witherror=True, series=False,
@@ -368,12 +379,12 @@ def plot_tweet_sentiment(dataname):
 
         plot_multiple_xy_averages(data, 7, y_ind, 4, cdict=cdict, marker='s', witherror=True, series=False,
                                   conditions=[(2, t), (3, 100)], ax=ax,
-                                  labels={0.001: "0.1%", 0.01: "1%", 0.1: "10%", 0.5:"50%", 1:"100%"})
+                                  labels=ls_100)
         plot_multiple_xy_averages(data, 7, y_ind, 4, cdict=cdict, marker='v', witherror=True, series=False, line='--',
                                   conditions=[(2, t), (3, 300)], ax=ax,
-                                  labels={0.001: "0.1%", 0.01: "1%", 0.1: "10%", 0.5:"50%", 1:"100%"})
+                                  labels=ls_300)
 
-        ax.text(1, 0.77, labels[t-1], bbox=dict(facecolor=c, alpha=0.3, boxstyle="round,pad=.2",))
+        ax.text(1, 0.77, "$\mu,\sigma$", bbox=dict(facecolor=c, alpha=0.3, boxstyle="round,pad=.2",))
 
         ax.set_ylim([0.55, 0.79])
         ax.set_xlim([-5, 105])
@@ -381,10 +392,15 @@ def plot_tweet_sentiment(dataname):
         ax.tick_params(axis='y', labelsize=10)
         ax.set_xlabel("W2v corpus size (% of total)",fontsize='x-small')
         ax.set_ylabel("F-score", fontsize='x-small')
-        #plt.legend(loc="lower right",  ncol=2, fancybox=True, shadow=True, fontsize='x-small')
+        # get handles
         #plt.savefig("%s_%i_%i.pdf" % (dataname, size, t))
 
-    plot_multiple_bases(data_bow, 7, y_ind, 4, cdict=cdict, ax=ax2)
+    plot_multiple_bases(data_bow, 7, y_ind, 4, cdict=cdict, ax=ax2, labels=ls_bow)
+    handles, ls = ax2.get_legend_handles_labels()
+    # remove the errorbars
+    #handles = [h[0] for h in handles]
+    ax2.legend(handles, ls, loc="lower center",  ncol=3, fancybox=True, shadow=False, fontsize='xx-small',
+               bbox_to_anchor=(0.5, 0.05))
     #plot_multiple_bases(data_bow, 2, 3,1, cdict=cdict, ax=ax3)
     #plot_multiple_bases(data_bow, 2, 3,1, cdict=cdict, ax=ax4)
     plt.savefig("all.pdf")
@@ -445,6 +461,22 @@ def plot_tweet_sentiment(dataname):
 
     #plt.savefig("%s_features_w2v.pdf" % (dataname))
 
+def plot_feature_dep(dataname):
+    features_data, cdict, names = read_data(dataname, cind=3)
+    plt.figure()
+    plot_multiple_xy_averages(features_data, 2, 12, 3, cdict='r', marker='s', witherror=True, series=False)
+    if "BOW" in names:
+        plot_multiple_bases(features_data, 2, 12, 3, cdict='r', conditions=[(2, names['BOW'])])
+    labels = [r'$\mu$',r'$\sigma$']
+    n_features = len(names.keys()) - 1
+    for i in range(1, int((n_features)/2)):
+        labels.append(r'$\tau^{%i}$' % i)
+        labels.append(r'$\tau_\sigma^{%i}$' % i)
+    plt.gca().set_xlim([0, len(labels)])
+    plt.gca().set_xticks(range(1, len(labels)),)
+    plt.gca().set_xticklabels(labels, rotation=0, ha='center')
+#    plt.grid()
+    plt.savefig(dataname+".pdf")
 
 
 def plot_kenyan_data(dataname):
@@ -472,7 +504,7 @@ def plot_kenyan_data(dataname):
         labels.append(r'$\tau_\sigma^%i$' % i)
     plt.gca().set_xticks(range(1, len(labels)),)
     plt.gca().set_xticklabels(labels, rotation=0, ha='center')
-    plt.xlim([0, len(labels)])
+    plt.xlim([0, len(labels)+3])
     plt.xlabel("Features")
     plt.ylabel("Minority f-score")
     plt.grid()
@@ -533,7 +565,7 @@ def plot_kenyan_data(dataname):
     plt.legend(loc='upper left', ncol=2, fancybox=True, shadow=True, fontsize='x-small')
 
     ax = plt.axes([0.52, 0.17, .36, .36], axisbg='w')
-    plot_multiple_xy_averages(features_data, 2, 8, 4, cdict='b', marker='o', witherror=True, series=False, ax=ax)
+    plot_multiple_xy_averages(features_data, 2, 11, 4, cdict='b', marker='o', witherror=True, series=False, ax=ax)
     labels = [r'$\mu$']
     for i in range(1,6):
         labels.append(r'$\kappa^%i$' % i)

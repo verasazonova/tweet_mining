@@ -30,7 +30,7 @@ class BOWModel(BaseEstimator, TransformerMixin):
     # build dictionary and the tfidf model for the data
     # X is an array of non-tokenized sentences
     def fit(self, X, y=None):
-        x_clean = tu.clean_and_tokenize(X, stoplist=self.stoplist)
+        x_clean = tu.clean_and_tokenize(X, stoplist=self.stoplist, keep_all=False)
         self.dictionary = corpora.Dictionary(x_clean)
         self.dictionary.filter_extremes(no_above=self.no_above, no_below=self.no_below)
         self.tfidf = models.TfidfModel([self.dictionary.doc2bow(text) for text in x_clean],
@@ -92,15 +92,16 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
         start = 2*size
         l = size
         for i in range(1,self.diffmax0):
-            name = "%02d_diff0_%i" % (feature_cnt, i)
-            feature_cnt += 1
-            val = (start, start + l)
-            self.feature_crd[name] = val
-            start += l
+            #name = "%02d_diff0_%i" % (feature_cnt, i)
+            #feature_cnt += 1
+            #val = (start, start + l)
+            #self.feature_crd[name] = val
+            #start += l
             name = "%02d_diff0_std_%i" % (feature_cnt, i)
             feature_cnt += 1
             val = (start, start + l)
             self.feature_crd[name] = val
+            start += l
         for i in range(1,self.diffmax1):
             name = "%02d_diff1_%i" % (feature_cnt, i)
             feature_cnt += 1
@@ -139,10 +140,10 @@ class W2VTextModel(BaseEstimator, TransformerMixin):
         for i in range(1, self.diffmax0):
             if len(data) > i:
                 data_diff = data - np.roll(data, i, axis=0)
-                features.append(np.median(np.diff(data_diff, axis=0), axis=0))
+                #features.append(np.median(np.diff(data_diff, axis=0), axis=0))
                 features.append(np.std(np.diff(data_diff, axis=0), axis=0))
             else:
-                features.append(np.zeros((2*size,)))
+                features.append(np.zeros((1*size,)))
 
         # these features are not differences between words, they are differences between columns !!!!!
         # I don't know what it corresponds to
